@@ -25,7 +25,7 @@ import {
 import { createId, ensureWorkspace, hashContactValue, recordAudit, requireDb } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 import { extractDocumentText } from "../services/documentText";
-import { storagePut } from "../storage";
+import { getPrivateDocumentUrl, putPrivateDocument } from "../services/privateStorage";
 import { assertTransition, isConsequentialAction } from "../workflow";
 import { consequentialRouter } from "./consequential";
 import { candidateWorkflowsRouter } from "./candidateWorkflows";
@@ -257,6 +257,14 @@ export const candidatesRouter = router({
       await requireOwned(candidateRows[0], ctx.user.id, "Candidate");
       return db.select().from(candidateDocuments).where(and(eq(candidateDocuments.ownerId, ctx.user.id), eq(candidateDocuments.candidateId, input.candidateId))).orderBy(desc(candidateDocuments.createdAt));
     }),
+    access: protectedProcedure.input(z.object({ documentId: z.string().min(4) })).query(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const document = (await db.select().from(candidateDocuments).where(and(eq(candidateDocuments.id, input.documentId), eq(candidateDocuments.ownerId, ctx.user.id))).limit(1))[0];
+      if (!document) throw new TRPCError({ code: "NOT_FOUND", message: "Candidate document was not found." });
+      const url = await getPrivateDocumentUrl(document.storageKey, 300);
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.actor?.id ?? ctx.user.id), action: "candidate.document_access_granted", resourceType: "candidate_document", resourceId: document.id, metadata: { expiresInSeconds: 300 } });
+      return { url, expiresAt: new Date(Date.now() + 300_000) };
+    }),
     upload: protectedProcedure.input(z.object({
       candidateId: z.string().min(4),
       originalName: z.string().trim().min(1).max(255),
@@ -271,7 +279,7 @@ export const candidatesRouter = router({
       if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Candidate documents must be no larger than 5 MB." });
       const safeName = input.originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
       const sha256 = createHash("sha256").update(bytes).digest("hex");
-      const uploaded = await storagePut(`private/${ctx.user.id}/candidates/${candidate.id}/${safeName}`, bytes, input.mimeType);
+      const uploaded = await putPrivateDocument(`private/${ctx.user.id}/candidates/${candidate.id}/${safeName}`, bytes, input.mimeType);
       const id = createId("doc_");
       await db.insert(candidateDocuments).values({
         id, candidateId: candidate.id, ownerId: ctx.user.id, documentType: input.documentType, storageKey: uploaded.key, storageUrl: uploaded.url,

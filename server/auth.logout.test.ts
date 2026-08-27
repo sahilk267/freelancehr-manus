@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
@@ -58,5 +58,19 @@ describe("auth.logout", () => {
       httpOnly: true,
       path: "/",
     });
+  });
+
+  it("clears the OIDC session cookie when the portable production runtime is active", async () => {
+    const originalMode = process.env.AUTH_MODE;
+    process.env.AUTH_MODE = "oidc";
+    const headers: Record<string, string> = {};
+    const { ctx } = createAuthContext();
+    ctx.res = { setHeader: (name: string, value: string) => { headers[name] = value; } } as TrpcContext["res"];
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.auth.logout()).resolves.toEqual({ success: true });
+    expect(headers["Set-Cookie"]).toContain("__Host-fh_session=");
+    expect(headers["Set-Cookie"]).toContain("Max-Age=0");
+    if (originalMode === undefined) delete process.env.AUTH_MODE;
+    else process.env.AUTH_MODE = originalMode;
   });
 });

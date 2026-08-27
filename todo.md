@@ -82,5 +82,14 @@
 - [x] Implement workspace membership resolution and role-based authorization across protected routers so displayed role permissions are actually enforced.
 - [x] Add role-permission tests for recruitment preparation, coordinator operations, finance preparation, viewer read-only behavior, and owner-only consequential actions.
 - [x] Add an integration test proving a team member receives a forbidden response from a real owner-only consequential recruitment procedure.
-- [ ] Read the team-access TODO items, save a checkpoint, and deliver the implementation status.
-- [ ] Replace development authentication and document-storage dependencies with selected production OIDC/session and private object-storage services before deploying to Hostinger.
+- [x] Read the team-access TODO items, save a checkpoint, and deliver the implementation status.
+- [x] Complete portable OIDC session lifecycle behavior, including logout cookie invalidation, before deploying to Hostinger.
+- [x] Add a dual-mode private document-storage adapter that uses project-managed storage only in development and S3-compatible private storage in production.
+- [x] Add signed private document retrieval with server-side workspace ownership checks and no public object URLs.
+- [x] Add production authentication configuration validation and fail-closed startup checks without selecting or activating an OIDC provider.
+- [x] Complete portable session/authentication interfaces that preserve development login and correctly invalidate future OIDC sessions on logout.
+- [x] Add test coverage for production configuration guards and private document access rules.
+- [x] Update the Hostinger deployment handoff with concrete OIDC, session, S3-compatible storage, and migration activation steps.
+- [ ] Save a Hostinger-readiness checkpoint after the completed OIDC session invalidation validation.
+- [x] Clear the production OIDC session cookie on logout and add specific OIDC logout coverage.
+- [ ] Configure the chosen OIDC provider and private S3-compatible storage credentials in Hostinger hPanel, then run deployed-domain login and signed-document tests.

@@ -39,7 +39,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await requireDb();
   const values: InsertUser = { ...user, openId: user.openId };
-  if (!values.role && user.openId === ENV.ownerOpenId) values.role = "admin";
+  const isConfiguredOwner = user.openId === ENV.ownerOpenId || user.openId === process.env.PRIMARY_OWNER_OPEN_ID || (Boolean(user.email) && user.email!.trim().toLowerCase() === process.env.PRIMARY_OWNER_EMAIL?.trim().toLowerCase());
+  if (!values.role && isConfiguredOwner) values.role = "admin";
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({
     set: {

@@ -6,30 +6,40 @@ import Fastify from "fastify";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { appRouter } from "./routers";
-import { sdk } from "./_core/sdk";
 import type { User } from "../drizzle/schema";
 import { processHostingerMailWebhook } from "./services/hostingerWebhook";
+import { assertProductionRuntimeConfiguration, authenticateRuntimeRequest, beginOidcLogin, completeOidcLogin, isOidcRuntime } from "./services/runtimeAuth";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const staticRoot = path.resolve(currentDir, "public");
 
 async function createFastifyContext({ req, res }: { req: { raw: unknown }; res: { raw: unknown } }) {
-  let user: User | null = null;
-  try {
-    user = await sdk.authenticateRequest(req.raw as Parameters<typeof sdk.authenticateRequest>[0]);
-  } catch {
-    user = null;
-  }
+  const user: User | null = await authenticateRuntimeRequest(req.raw as { headers?: { cookie?: string } });
   return { req: req.raw, res: res.raw, user, actor: user, workspace: null } as never;
 }
 
 async function start() {
+  assertProductionRuntimeConfiguration();
   const app = Fastify({ logger: true, bodyLimit: 6 * 1024 * 1024 });
   await app.register(cors, { origin: process.env.APP_BASE_URL ?? false, credentials: true });
   await app.register(fastifyTRPCPlugin, {
     prefix: "/api/trpc",
     trpcOptions: { router: appRouter, createContext: createFastifyContext },
   });
+  if (isOidcRuntime()) {
+    app.get("/api/auth/oidc/login", async (_request, reply) => {
+      try { const login = await beginOidcLogin(); reply.header("Set-Cookie", login.stateCookie); return reply.redirect(login.redirectUrl); }
+      catch { return reply.status(503).send({ error: "OIDC sign-in is not configured." }); }
+    });
+    app.get("/api/auth/oidc/callback", async (request, reply) => {
+      try {
+        const query = request.query as { code?: string; state?: string };
+        const completed = await completeOidcLogin({ code: query.code, state: query.state, cookieHeader: request.headers.cookie });
+        reply.header("Set-Cookie", [completed.sessionCookie, completed.clearStateCookie]);
+        return reply.redirect("/");
+      } catch { return reply.status(403).send({ error: "OIDC sign-in could not be completed." }); }
+    });
+  }
   app.post("/api/webhooks/hostinger-mail", async (request, reply) => {
     const authorization = typeof request.headers.authorization === "string" ? request.headers.authorization : undefined;
     const result = await processHostingerMailWebhook({ authorization, body: request.body });

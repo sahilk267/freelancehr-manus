@@ -31,6 +31,18 @@ The repeatable pipeline is **build → upload/deploy → configure environment �
 | 7 | Configure a short Hostinger cron to invoke the bounded queue endpoint | One controlled job maximum per trigger during pilot |
 | 8 | Keep automation in `safe` mode for pilot | Every external-facing action still requires explicit owner approval |
 
+## Production startup guard
+
+The production server intentionally **refuses to start** unless its OIDC and private-storage configuration is complete. This prevents a deployment from accidentally authenticating against the development integration or writing CVs to a non-portable storage path. Set `AUTH_MODE=oidc` and `VITE_AUTH_MODE=oidc` at build time, then configure the following values in hPanel before starting `pnpm start:hostinger`.
+
+| Configuration group | Required values | Runtime behavior when absent |
+| --- | --- | --- |
+| OIDC login | `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_BASE_URL`, `SESSION_SECRET`, and either `PRIMARY_OWNER_OPEN_ID` or `PRIMARY_OWNER_EMAIL` | Startup is blocked without exposing the missing secret value. |
+| OIDC callback | `OIDC_REDIRECT_URI=https://freelancehr.overseasjob.in/api/auth/oidc/callback` registered exactly with the provider | Sign-in is rejected if state, nonce, PKCE, issuer, audience, or signature validation fails. |
+| Private documents | `PRIVATE_STORAGE_MODE=s3`, `STORAGE_BUCKET`, `STORAGE_REGION`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, plus optional `STORAGE_ENDPOINT`/`STORAGE_FORCE_PATH_STYLE` for an S3-compatible vendor | Startup is blocked; candidate documents are never written to public web files. |
+
+The document table stores a non-public `private://s3/...` reference in production. Access is granted through an owner-authorized, short-lived signed URL, with a corresponding audit event. Team roles cannot access the signed-document procedure.
+
 ## Environment inventory
 
 Never commit the values. Set these in the Hostinger application environment panel or equivalent secure secret manager.

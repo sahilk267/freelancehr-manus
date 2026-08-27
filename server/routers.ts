@@ -6,6 +6,7 @@ import { operationsRouter } from "./routers/operations";
 import { recruitmentRouter } from "./routers/recruitment";
 import { emailRouter } from "./routers/email";
 import { teamRouter } from "./routers/team";
+import { getRuntimeLogoutCookie } from "./services/runtimeAuth";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -13,8 +14,16 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      const oidcLogoutCookie = getRuntimeLogoutCookie();
+      const response = ctx.res as unknown as { clearCookie?: (name: string, options: Record<string, unknown>) => void; append?: (name: string, value: string) => void; setHeader?: (name: string, value: string) => void };
+      if (oidcLogoutCookie) {
+        if (response.append) response.append("Set-Cookie", oidcLogoutCookie);
+        else response.setHeader?.("Set-Cookie", oidcLogoutCookie);
+      } else {
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        if (response.clearCookie) response.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+        else response.setHeader?.("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+      }
       return {
         success: true,
       } as const;
