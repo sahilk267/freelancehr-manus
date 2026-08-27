@@ -4,6 +4,7 @@ import { z } from "zod";
 import { approvals, conversations, emailIdentities, incidents, messages, suppressionList } from "../../drizzle/schema";
 import { createId, hashContactValue, recordAudit, requireDb } from "../db";
 import { detectOptOut, getSmtpStatus, isApprovedSenderAddress, sendApprovedEmail, verifySmtpTransport, EMAIL_PURPOSES } from "../services/email";
+import { chooseThreadReference, getInboundMailStatus, verifyInboundMailTransport } from "../services/inboundMail";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const identityInput = z.object({ email: z.string().email(), purpose: z.enum(EMAIL_PURPOSES), displayName: z.string().trim().min(2).max(160).default("FreelanceHR"), replyTo: z.string().email().optional() });
@@ -75,6 +76,12 @@ export const emailRouter = router({
     }),
   }),
   inbound: router({
+    status: protectedProcedure.query(() => getInboundMailStatus()),
+    verify: protectedProcedure.mutation(async ({ ctx }) => {
+      const result = await verifyInboundMailTransport();
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.inbound_transport_verified", resourceType: "mail_transport", resourceId: "imap", metadata: { result: result.status } });
+      return result;
+    }),
     record: protectedProcedure.input(z.object({ conversationId: z.string().min(4), sender: z.string().email(), subject: z.string().max(255).optional(), body: z.string().trim().min(1).max(12000), providerMessageId: z.string().max(255).optional() })).mutation(async ({ ctx, input }) => {
       const db = await requireDb(); const conversation = (await db.select().from(conversations).where(and(eq(conversations.id, input.conversationId), eq(conversations.ownerId, ctx.user.id))).limit(1))[0];
       if (!conversation) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation was not found." });
@@ -84,6 +91,22 @@ export const emailRouter = router({
       await db.update(conversations).set({ status: optedOut ? "opted_out" : "reply_received", classification: optedOut ? "stop_contact" : null, lastMessageAt: new Date() }).where(eq(conversations.id, conversation.id));
       await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "inbound_mail", action: optedOut ? "email.opt_out_detected" : "email.inbound_recorded", resourceType: "conversation", resourceId: conversation.id, nextState: optedOut ? "opted_out" : "reply_received", metadata: { messageId: id } });
       return { messageId: id, optedOut };
+    }),
+    recordByThread: protectedProcedure.input(z.object({ sender: z.string().email(), subject: z.string().max(255).optional(), body: z.string().trim().min(1).max(12000), providerMessageId: z.string().min(3).max(255), inReplyTo: z.string().max(255).optional(), references: z.array(z.string().max(255)).max(20).default([]) })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb(); const reference = chooseThreadReference(input);
+      const parent = reference ? (await db.select().from(messages).where(and(eq(messages.ownerId, ctx.user.id), eq(messages.providerMessageId, reference))).limit(1))[0] : undefined;
+      if (!parent) {
+        const incidentId = createId("inc_");
+        await db.insert(incidents).values({ id: incidentId, ownerId: ctx.user.id, incidentType: "unmatched_inbound_email", severity: "medium", status: "detected", affectedResourceType: "email", affectedResourceId: input.providerMessageId, summary: "Inbound mail did not contain a recognized message thread reference." });
+        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "inbound_mail", action: "email.inbound_unmatched", resourceType: "email", resourceId: input.providerMessageId, metadata: { incidentId } });
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inbound mail could not be matched and has been routed to the exception center." });
+      }
+      const id = createId("msg_"); const optedOut = detectOptOut(input.body);
+      await db.insert(messages).values({ id, conversationId: parent.conversationId, ownerId: ctx.user.id, direction: "inbound", status: "received", subject: input.subject, body: input.body, providerMessageId: input.providerMessageId, idempotencyKey: `inbound:${input.providerMessageId}`, aiGenerated: false, deliveredAt: new Date() });
+      if (optedOut) await db.insert(suppressionList).values({ id: createId("sup_"), ownerId: ctx.user.id, channel: "email", valueHash: hashContactValue(input.sender), reason: "Inbound opt-out detected", source: "inbound_mail" }).onDuplicateKeyUpdate({ set: { active: true, reason: "Inbound opt-out detected", source: "inbound_mail" } });
+      await db.update(conversations).set({ status: optedOut ? "opted_out" : "reply_received", classification: optedOut ? "stop_contact" : null, lastMessageAt: new Date() }).where(eq(conversations.id, parent.conversationId));
+      await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "inbound_mail", action: optedOut ? "email.opt_out_detected" : "email.inbound_thread_matched", resourceType: "conversation", resourceId: parent.conversationId, nextState: optedOut ? "opted_out" : "reply_received", metadata: { messageId: id, parentMessageId: parent.id } });
+      return { messageId: id, conversationId: parent.conversationId, optedOut };
     }),
     conversations: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).default({ limit: 50 })).query(async ({ ctx, input }) => (await requireDb()).select().from(conversations).where(eq(conversations.ownerId, ctx.user.id)).orderBy(desc(conversations.updatedAt)).limit(input.limit)),
   }),

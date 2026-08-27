@@ -22,6 +22,8 @@ Use the secure environment-variable panel to add the following values from Hosti
 | `SMTP_PASSWORD` | The mailbox password or app password |
 | `SMTP_FROM_DOMAIN` | `overseasjob.in` |
 
+For inbound reply monitoring, add these separate environment values only after the outgoing SMTP test succeeds: `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, and `IMAP_PASSWORD`. Use the same dedicated operations mailbox or a forwarding mailbox; never expose these values to the browser.
+
 The live readiness indicator in **Control Plane → Domain sender identities** will remain disabled until all four SMTP credentials are configured. Then register each six sender identities, verify the mailbox exists, and activate it only after a successful test message.
 
 ## 4. Live operating sequence
