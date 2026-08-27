@@ -19,6 +19,7 @@ import {
 import { createId, ensureWorkspace, getRecentAudits, recordAudit, requireDb } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
 import { processOneQueuedJob } from "../services/queue";
+import { assertTransition } from "../workflow";
 
 const paginationInput = z.object({ limit: z.number().int().min(1).max(100).default(50) }).default({ limit: 50 });
 
@@ -116,6 +117,7 @@ export const operationsRouter = router({
       const rows = await db.select().from(automationQueue).where(and(eq(automationQueue.id, input.id), eq(automationQueue.ownerId, ctx.user.id))).limit(1);
       const job = rows[0];
       if (!job) throw new Error("Automation job was not found.");
+      assertTransition("automation_job", job.status, "queued");
       await db.update(automationQueue).set({ status: "queued", scheduledAt: new Date(), lastError: null, lockToken: null, lockedAt: null }).where(eq(automationQueue.id, input.id));
       await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "automation.retried", resourceType: "automation_job", resourceId: input.id, previousState: job.status, nextState: "queued" });
       return { success: true };
@@ -141,6 +143,15 @@ export const operationsRouter = router({
       await db.insert(incidents).values({ id, ownerId: ctx.user.id, incidentType: input.incidentType, severity: input.severity, summary: input.summary, affectedResourceType: input.affectedResourceType ?? null, affectedResourceId: input.affectedResourceId ?? null });
       await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "incident.created", resourceType: "incident", resourceId: id, nextState: "detected", metadata: { severity: input.severity } });
       return { id };
+    }),
+    updateIncidentState: protectedProcedure.input(z.object({ id: z.string().min(4), status: z.enum(["triaged", "contained", "investigated", "resolved"]), containmentNotes: z.string().trim().max(4000).optional() })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const incident = (await db.select().from(incidents).where(and(eq(incidents.id, input.id), eq(incidents.ownerId, ctx.user.id))).limit(1))[0];
+      if (!incident) throw new Error("Incident was not found.");
+      assertTransition("incident", incident.status, input.status);
+      await db.update(incidents).set({ status: input.status, containmentNotes: input.containmentNotes ?? incident.containmentNotes, resolvedAt: input.status === "resolved" ? new Date() : incident.resolvedAt }).where(eq(incidents.id, incident.id));
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "incident.state_changed", resourceType: "incident", resourceId: incident.id, previousState: incident.status, nextState: input.status });
+      return { success: true };
     }),
   }),
   audits: router({
