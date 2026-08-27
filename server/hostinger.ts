@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { appRouter } from "./routers";
 import { sdk } from "./_core/sdk";
 import type { User } from "../drizzle/schema";
+import { processHostingerMailWebhook } from "./services/hostingerWebhook";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const staticRoot = path.resolve(currentDir, "public");
@@ -28,6 +29,11 @@ async function start() {
   await app.register(fastifyTRPCPlugin, {
     prefix: "/api/trpc",
     trpcOptions: { router: appRouter, createContext: createFastifyContext },
+  });
+  app.post("/api/webhooks/hostinger-mail", async (request, reply) => {
+    const authorization = typeof request.headers.authorization === "string" ? request.headers.authorization : undefined;
+    const result = await processHostingerMailWebhook({ authorization, body: request.body });
+    return reply.status(result.statusCode).send(result.body);
   });
   app.get("/api/health", async () => ({ status: "ok", service: "freelancehr", now: new Date().toISOString() }));
   await app.register(fastifyStatic, { root: staticRoot, wildcard: false });

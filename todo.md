@@ -45,12 +45,22 @@
 - [x] Add configurable domain sender identities for owner, clients, talent, interviews, finance, and privacy mailboxes.
 - [x] Implement a server-side SMTP transport contract, encrypted credential use, connection health check, and no-secret logging rules.
 - [x] Implement approval-gated message sending, message lifecycle transitions, delivery-failure handling, recipient suppression checks, and audit records.
-- [ ] Add inbound-email intake contract with mailbox polling/webhook adapter, thread matching, reply classification queueing, opt-out detection, and exception routing.
+- [x] Add inbound-email intake contract with mailbox polling/webhook adapter, thread matching, reply classification queueing, opt-out detection, and exception routing.
 - [ ] Build email identity, sender-health, outbound approval, and conversation-history views in the owner workspace.
 - [ ] Add unit tests for sender allowlists, suppression enforcement, approval-before-send, inbound thread correlation, and opt-out handling.
 - [x] Write the Hostinger email credential, SPF, DKIM, DMARC, forwarding, and mail-reception configuration handoff for freelancehr.overseasjob.in.
 - [ ] Read the email integration TODO items, verify completed work, save a checkpoint, and deliver the next-phase summary.
-- [ ] Validate the live SMTP connection, sender identities, and mail-reception access after the user supplies Hostinger credentials.
-- [x] Add an auditable SMTP transport verification procedure that persists sender health status.
-- [x] Add outbound SMTP failure routing with message status updates, exception creation, and audit events.
-- [ ] Add unit coverage for mail-transport verification and SMTP failure transitions.
+- [x] Validate the live SMTP connection, sender identities, and mail-reception access after the user supplies Hostinger credentials. Superseded by the Hostinger Mail API activation task.
+- [x] Add an auditable SMTP transport verification procedure that persists sender health status. Superseded by Hostinger Mail API token verification.
+- [x] Add outbound SMTP failure routing with message status updates, exception creation, and audit events. Superseded by Hostinger Mail API delivery-failure routing.
+- [x] Add unit coverage for mail-transport verification and SMTP failure transitions. Superseded by Hostinger Mail API readiness coverage.
+- [x] Replace the SMTP/IMAP client with a Hostinger Mail API client using only server-side API credentials and configurable endpoint paths.
+- [x] Replace sender verification, approved delivery, and inbound message intake with Hostinger Mail API request and event-adapter contracts.
+- [x] Rename the control-plane mail health and configuration language from SMTP/IMAP to Hostinger Mail API.
+- [x] Update tests and Hostinger deployment documentation for Hostinger Mail API credentials, endpoint paths, sender verification, and inbound webhooks/events.
+- [ ] Validate the live Hostinger Mail API connection, sender identities, outbound approval flow, and inbound events after the user provides API access details.
+- [x] Implement a Hostinger Mail API inbound webhook endpoint with secret validation, provider-payload normalization, and safe malformed-event handling.
+- [x] Enqueue accepted inbound replies for controlled classification and persist a corresponding audit event.
+- [x] Add tests for Hostinger inbound webhook validation, provider-thread correlation, malformed-event routing, and classification-queue creation.
+- [x] Add persistence-level tests that assert matched Hostinger inbound events create classification jobs and audit records.
+- [x] Add webhook tests for unmatched-event incident routing and safe accepted responses.

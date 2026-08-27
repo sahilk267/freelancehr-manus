@@ -1,6 +1,6 @@
-# Hostinger Email Activation — FreelanceHR
+# Hostinger Mail API Activation — FreelanceHR
 
-This guide activates the existing approval-controlled email layer. Do not place mailbox passwords in source files, client-side code, Git, or chat messages.
+This guide activates the existing approval-controlled **Hostinger Mail API** layer. Do not place bearer tokens or webhook secrets in source files, client-side code, Git, or chat messages.
 
 ## 1. Create and route the mailboxes
 
@@ -10,29 +10,33 @@ Create these six mailboxes in Hostinger Email and forward their inbound mail to 
 
 In Hostinger hPanel, publish the SPF and DKIM records generated for the mailbox service. Add a DMARC policy initially using monitoring mode (`p=none`) and review aggregate reports before moving to a stricter policy. Do not enable bulk automation until SPF, DKIM, and DMARC all pass for the sending domain.
 
-## 3. Add the backend-only credentials
+## 3. Add the backend-only API credentials
 
-Use the secure environment-variable panel to add the following values from Hostinger’s **Email Client Configuration** page:
+Create an order-scoped Hostinger Mail API token in the Hostinger Panel, restricted to only the intended mailboxes. Then add these values through the secure environment-variable panel:
 
 | Variable | Required value |
 | --- | --- |
-| `SMTP_HOST` | Hostinger’s outgoing SMTP hostname |
-| `SMTP_PORT` | The TLS SMTP port shown in hPanel, normally 465 or 587 |
-| `SMTP_USER` | `operations@overseasjob.in` or another dedicated service mailbox |
-| `SMTP_PASSWORD` | The mailbox password or app password |
-| `SMTP_FROM_DOMAIN` | `overseasjob.in` |
+| `HOSTINGER_MAIL_API_TOKEN` | Order-scoped bearer token created in Hostinger Panel |
+| `HOSTINGER_MAIL_FROM_DOMAIN` | `overseasjob.in` |
+| `HOSTINGER_MAILBOX_CLIENTS_ID` | Mailbox resource ID for `clients@overseasjob.in` |
+| `HOSTINGER_MAILBOX_TALENT_ID` | Mailbox resource ID for `talent@overseasjob.in` |
+| `HOSTINGER_MAILBOX_INTERVIEWS_ID` | Mailbox resource ID for `interviews@overseasjob.in` |
+| `HOSTINGER_MAILBOX_FINANCE_ID` | Mailbox resource ID for `finance@overseasjob.in` |
+| `HOSTINGER_MAILBOX_PRIVACY_ID` | Mailbox resource ID for `privacy@overseasjob.in` |
+| `HOSTINGER_MAILBOX_OWNER_ID` | Mailbox resource ID for `owner@overseasjob.in` |
+| `HOSTINGER_MAIL_WEBHOOK_SECRET` | Secret used to validate Hostinger inbound webhook events |
 
-For inbound reply monitoring, add these separate environment values only after the outgoing SMTP test succeeds: `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, and `IMAP_PASSWORD`. Use the same dedicated operations mailbox or a forwarding mailbox; never expose these values to the browser.
+For inbound reply monitoring, create a Hostinger Mail API webhook for each permitted mailbox, select the `message.received` event, use `https://freelancehr.overseasjob.in/api/webhooks/hostinger-mail` as the callback URL, and store its one-time bearer token as `HOSTINGER_MAIL_WEBHOOK_SECRET`. No SMTP or IMAP credentials are used by FreelanceHR.
 
-The live readiness indicator in **Control Plane → Domain sender identities** will remain disabled until all four SMTP credentials are configured. Then register each six sender identities, verify the mailbox exists, and activate it only after a successful test message.
+The live readiness indicator in **Control Plane → Domain sender identities** remains disabled until the bearer token is configured. Register each sender identity, map its mailbox resource ID, verify API access, and activate it only after a successful controlled test message.
 
 ## 4. Live operating sequence
 
-Every outbound message follows: **draft → owner approval request → owner approval → sender/recipient validation → SMTP delivery → audit event**. The delivery layer blocks inactive senders, recipients on the suppression list, and unapproved messages. The emergency stop blocks all external automation.
+Every outbound message follows: **draft → owner approval request → owner approval → sender/recipient validation → Hostinger Mail API delivery → audit event**. The delivery layer blocks inactive senders, recipients on the suppression list, and unapproved messages. The emergency stop blocks all external automation.
 
 ## 5. Receive replies safely
 
-For the first release, forward each mailbox to the dedicated operations mailbox and use the **Inbound mail** adapter to record and classify replies. A production inbound connector must preserve provider message IDs, map each reply to an existing conversation, and route terms such as “unsubscribe”, “stop”, or “do not contact” to the suppression list before any follow-up is scheduled.
+Configure Hostinger Mail API webhooks for permitted mailboxes and pass every inbound event through the **Inbound mail** adapter. The adapter preserves provider message IDs, maps each reply through `In-Reply-To` or `References`, and routes terms such as “unsubscribe”, “stop”, or “do not contact” to the suppression list before any follow-up is scheduled.
 
 ## 6. Activation test
 

@@ -3,14 +3,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { approvals, conversations, emailIdentities, incidents, messages, suppressionList } from "../../drizzle/schema";
 import { createId, hashContactValue, recordAudit, requireDb } from "../db";
-import { detectOptOut, getSmtpStatus, isApprovedSenderAddress, sendApprovedEmail, verifySmtpTransport, EMAIL_PURPOSES } from "../services/email";
-import { chooseThreadReference, getInboundMailStatus, verifyInboundMailTransport } from "../services/inboundMail";
+import { chooseThreadReference, detectOptOut, getHostingerMailApiStatus, isApprovedSenderAddress, sendViaHostingerMailApi, verifyHostingerMailApi, EMAIL_PURPOSES } from "../services/hostingerMail";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const identityInput = z.object({ email: z.string().email(), purpose: z.enum(EMAIL_PURPOSES), displayName: z.string().trim().min(2).max(160).default("FreelanceHR"), replyTo: z.string().email().optional() });
 
 export const emailRouter = router({
-  status: protectedProcedure.query(() => getSmtpStatus()),
+  status: protectedProcedure.query(() => getHostingerMailApiStatus()),
   identities: router({
     list: protectedProcedure.query(async ({ ctx }) => (await requireDb()).select().from(emailIdentities).where(eq(emailIdentities.ownerId, ctx.user.id)).orderBy(emailIdentities.purpose)),
     save: protectedProcedure.input(identityInput).mutation(async ({ ctx, input }) => {
@@ -25,17 +24,17 @@ export const emailRouter = router({
     setStatus: protectedProcedure.input(z.object({ id: z.string().min(4), status: z.enum(["active", "disabled", "unverified"]) })).mutation(async ({ ctx, input }) => {
       const db = await requireDb(); const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.id), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
       if (!identity) throw new TRPCError({ code: "NOT_FOUND", message: "Email identity was not found." });
-      if (input.status === "active" && !getSmtpStatus().configured) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Add SMTP credentials before activating a sender." });
-      await db.update(emailIdentities).set({ status: input.status, lastHealthCheckAt: new Date(), lastHealthStatus: input.status === "active" ? "configured" : "disabled" }).where(eq(emailIdentities.id, identity.id));
+      if (input.status === "active" && !getHostingerMailApiStatus().configured) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Add Hostinger Mail API credentials before activating a sender." });
+      await db.update(emailIdentities).set({ status: input.status, lastHealthCheckAt: new Date(), lastHealthStatus: input.status === "active" ? "api_configured" : "disabled" }).where(eq(emailIdentities.id, identity.id));
       await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.identity_status_changed", resourceType: "email_identity", resourceId: identity.id, previousState: identity.status, nextState: input.status });
       return { success: true };
     }),
     verify: protectedProcedure.input(z.object({ id: z.string().min(4) })).mutation(async ({ ctx, input }) => {
       const db = await requireDb(); const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.id), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
       if (!identity) throw new TRPCError({ code: "NOT_FOUND", message: "Email identity was not found." });
-      const result = await verifySmtpTransport();
+      const result = await verifyHostingerMailApi();
       await db.update(emailIdentities).set({ lastHealthCheckAt: new Date(), lastHealthStatus: result.status, status: result.ok ? "active" : "unverified" }).where(eq(emailIdentities.id, identity.id));
-      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.smtp_verified", resourceType: "email_identity", resourceId: identity.id, previousState: identity.status, nextState: result.ok ? "active" : "unverified", metadata: { result: result.status } });
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.hostinger_api_verified", resourceType: "email_identity", resourceId: identity.id, previousState: identity.status, nextState: result.ok ? "active" : "unverified", metadata: { result: result.status } });
       return result;
     }),
   }),
@@ -61,25 +60,25 @@ export const emailRouter = router({
       const blocked = (await db.select().from(suppressionList).where(and(eq(suppressionList.ownerId, ctx.user.id), eq(suppressionList.channel, "email"), eq(suppressionList.valueHash, hashContactValue(input.recipient)))).limit(1))[0];
       if (blocked?.active) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Recipient was suppressed before delivery." });
       try {
-        const result = await sendApprovedEmail({ from: `${identity.displayName} <${identity.email}>`, to: input.recipient, replyTo: identity.replyTo, subject: message.subject ?? "", text: message.body });
+        const result = await sendViaHostingerMailApi({ purpose: identity.purpose, to: input.recipient, displayName: identity.displayName, subject: message.subject ?? "", text: message.body });
         await db.update(messages).set({ status: "sent", providerMessageId: result.providerMessageId, sentAt: new Date() }).where(eq(messages.id, message.id));
-        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "smtp", action: "email.sent", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "sent", metadata: { approvalId: approval.id } });
+        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "hostinger_mail_api", action: "email.sent", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "sent", metadata: { approvalId: approval.id } });
         return { success: true, providerMessageId: result.providerMessageId };
       } catch (error) {
-        const reason = error instanceof Error ? error.message.slice(0, 1000) : "SMTP delivery failed";
+        const reason = error instanceof Error ? error.message.slice(0, 1000) : "Hostinger Mail API delivery failed";
         await db.update(messages).set({ status: "retryable_failed" }).where(eq(messages.id, message.id));
         const incidentId = createId("inc_");
-        await db.insert(incidents).values({ id: incidentId, ownerId: ctx.user.id, incidentType: "smtp_delivery_failure", severity: "high", status: "detected", affectedResourceType: "message", affectedResourceId: message.id, summary: reason });
-        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "smtp", action: "email.delivery_failed", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "retryable_failed", metadata: { incidentId } });
+        await db.insert(incidents).values({ id: incidentId, ownerId: ctx.user.id, incidentType: "hostinger_mail_api_delivery_failure", severity: "high", status: "detected", affectedResourceType: "message", affectedResourceId: message.id, summary: reason });
+        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "hostinger_mail_api", action: "email.delivery_failed", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "retryable_failed", metadata: { incidentId } });
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Delivery failed safely and was added to the exception center." });
       }
     }),
   }),
   inbound: router({
-    status: protectedProcedure.query(() => getInboundMailStatus()),
+    status: protectedProcedure.query(() => getHostingerMailApiStatus()),
     verify: protectedProcedure.mutation(async ({ ctx }) => {
-      const result = await verifyInboundMailTransport();
-      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.inbound_transport_verified", resourceType: "mail_transport", resourceId: "imap", metadata: { result: result.status } });
+      const result = await verifyHostingerMailApi();
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.inbound_api_verified", resourceType: "mail_transport", resourceId: "hostinger_mail_api", metadata: { result: result.status } });
       return result;
     }),
     record: protectedProcedure.input(z.object({ conversationId: z.string().min(4), sender: z.string().email(), subject: z.string().max(255).optional(), body: z.string().trim().min(1).max(12000), providerMessageId: z.string().max(255).optional() })).mutation(async ({ ctx, input }) => {
