@@ -46,8 +46,14 @@
 - [x] Implement a server-side SMTP transport contract, encrypted credential use, connection health check, and no-secret logging rules.
 - [x] Implement approval-gated message sending, message lifecycle transitions, delivery-failure handling, recipient suppression checks, and audit records.
 - [x] Add inbound-email intake contract with mailbox polling/webhook adapter, thread matching, reply classification queueing, opt-out detection, and exception routing.
-- [ ] Build email identity, sender-health, outbound approval, and conversation-history views in the owner workspace.
-- [ ] Add unit tests for sender allowlists, suppression enforcement, approval-before-send, inbound thread correlation, and opt-out handling.
+- [x] Build email identity, sender-health, outbound approval, and conversation-history views in the owner workspace.
+- [x] Add a message-level conversation history view with direction, subject, timestamps, status, and provider identifiers.
+- [x] Add an email-approval detail view with approval reason, payload, current status, and linked message context.
+- [x] Add typed-query and test coverage for email message history and email approval detail retrieval.
+- [x] Display the email-approval payload safely in the owner approval-detail panel and cover payload retrieval in tests.
+- [x] Add unit tests for sender allowlists, suppression enforcement, approval-before-send, inbound thread correlation, and opt-out handling.
+- [x] Add an owner-scoped email message-history query test.
+- [x] Add a controlled-delivery test proving outbound send fails without an approved email action.
 - [x] Write the Hostinger email credential, SPF, DKIM, DMARC, forwarding, and mail-reception configuration handoff for freelancehr.overseasjob.in.
 - [ ] Read the email integration TODO items, verify completed work, save a checkpoint, and deliver the next-phase summary.
 - [x] Validate the live SMTP connection, sender identities, and mail-reception access after the user supplies Hostinger credentials. Superseded by the Hostinger Mail API activation task.

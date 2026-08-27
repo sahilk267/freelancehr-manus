@@ -98,6 +98,12 @@ export const operationsRouter = router({
       return { success: true };
     }),
   }),
+  approvals: router({
+    list: protectedProcedure.input(paginationInput).query(async ({ ctx, input }) => {
+      const db = await requireDb();
+      return db.select().from(approvals).where(eq(approvals.ownerId, ctx.user.id)).orderBy(desc(approvals.createdAt)).limit(input.limit);
+    }),
+  }),
   queue: router({
     list: protectedProcedure.input(paginationInput).query(async ({ ctx, input }) => {
       const db = await requireDb();

@@ -39,6 +39,14 @@ export const emailRouter = router({
     }),
   }),
   outbound: router({
+    approvalDetail: protectedProcedure.input(z.object({ approvalId: z.string().min(4) })).query(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const approval = (await db.select().from(approvals).where(and(eq(approvals.id, input.approvalId), eq(approvals.ownerId, ctx.user.id), eq(approvals.actionType, "email_send"))).limit(1))[0];
+      if (!approval) throw new TRPCError({ code: "NOT_FOUND", message: "Email approval was not found." });
+      const message = (await db.select().from(messages).where(and(eq(messages.id, approval.resourceId), eq(messages.ownerId, ctx.user.id))).limit(1))[0] ?? null;
+      const conversation = message ? (await db.select().from(conversations).where(and(eq(conversations.id, message.conversationId), eq(conversations.ownerId, ctx.user.id))).limit(1))[0] ?? null : null;
+      return { approval, message, conversation };
+    }),
     requestApproval: protectedProcedure.input(z.object({ conversationId: z.string().min(4), senderIdentityId: z.string().min(4), recipient: z.string().email(), subject: z.string().trim().min(1).max(255), body: z.string().trim().min(8).max(12000) })).mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.senderIdentityId), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
@@ -106,6 +114,11 @@ export const emailRouter = router({
       await db.update(conversations).set({ status: optedOut ? "opted_out" : "reply_received", classification: optedOut ? "stop_contact" : null, lastMessageAt: new Date() }).where(eq(conversations.id, parent.conversationId));
       await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "inbound_mail", action: optedOut ? "email.opt_out_detected" : "email.inbound_thread_matched", resourceType: "conversation", resourceId: parent.conversationId, nextState: optedOut ? "opted_out" : "reply_received", metadata: { messageId: id, parentMessageId: parent.id } });
       return { messageId: id, conversationId: parent.conversationId, optedOut };
+    }),
+    messages: protectedProcedure.input(z.object({ conversationId: z.string().min(4), limit: z.number().int().min(1).max(100).default(50) })).query(async ({ ctx, input }) => {
+      const db = await requireDb(); const conversation = (await db.select().from(conversations).where(and(eq(conversations.id, input.conversationId), eq(conversations.ownerId, ctx.user.id))).limit(1))[0];
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation was not found." });
+      return db.select().from(messages).where(and(eq(messages.ownerId, ctx.user.id), eq(messages.conversationId, input.conversationId))).orderBy(desc(messages.createdAt)).limit(input.limit);
     }),
     conversations: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).default({ limit: 50 })).query(async ({ ctx, input }) => (await requireDb()).select().from(conversations).where(eq(conversations.ownerId, ctx.user.id)).orderBy(desc(conversations.updatedAt)).limit(input.limit)),
   }),
