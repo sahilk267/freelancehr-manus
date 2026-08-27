@@ -1,0 +1,36 @@
+# FreelanceHR Implementation TODO
+
+- [x] Define the portable React/Vite, Fastify/tRPC, MySQL, Hostinger Node.js, and OpenRouter architecture decisions in project documentation.
+- [x] Create complete Drizzle schema for policies, CRM, job requisitions, candidates, consent, messages, interviews, placements, invoices, automation, approvals, audit events, suppression, rights requests, and incidents.
+- [x] Generate and apply one database migration for the complete first-release schema.
+- [x] Implement protected tRPC routers for dashboard analytics, policies, prospects/clients, jobs, candidates, consent, screening, matching, shortlists, interviews, placements, invoices, approvals, exceptions, and operations.
+- [x] Enforce owner-controlled consequential actions, including client onboarding, candidate sharing, final candidate decisions, placement confirmation, invoice issuance, disputes, credits, and automation stopping.
+- [x] Implement immutable audit-event helpers and append audit events for every workflow state transition and consequential action.
+- [ ] Implement explicit workflow state-transition validation for prospects, jobs, candidates, screenings, shortlists, interviews, placements, invoices, automation jobs, rights requests, and incidents.
+- [x] Implement a database-backed automation queue with idempotency keys, retry/backoff state, bounded batch execution, and permanent-failure routing.
+- [x] Implement an OpenRouter server-side adapter contract with environment-based credentials, model registry, structured JSON validation, safe error handling, quota tracking, retry behavior, and fallback-model support.
+- [x] Implement consent, withdrawal, do-not-contact suppression, client-sharing approval, correction, and deletion-request workflows.
+- [x] Implement document metadata, secure upload validation hooks, provenance, CV parsing status, and controlled sharing fields.
+- [x] Build a responsive dashboard layout using the template DashboardLayout component and add navigation for Command Center, Prospects, Jobs, Candidates, Interviews, Placements, Finance, Exceptions, and Policies.
+- [x] Build the Command Center page with live pipeline counts, queue health, AI quota status, upcoming interviews, invoice ageing, and safety alerts.
+- [ ] Build prospect/client CRM workspace with lead stages, source provenance, outreach status, reply classification, discovery notes, fee proposal state, and onboarding approval controls.
+- [x] Build job-requisition workspace with structured intake, requirement-quality checks, weighted scorecard criteria, explicit client confirmation, and sourcing states.
+- [x] Build candidate workspace with searchable profiles, source/provenance, consent status, CV workflow, screening evidence, match status, withdrawal, and do-not-contact actions.
+- [x] Build explainable matching and shortlist workspace with rule-plus-semantic evidence placeholders, low-confidence routing, and controlled client-share approvals.
+- [ ] Build interview scheduling and feedback workspace with status transitions, reminders, rescheduling, attendance, scorecards, and immutable raw-feedback presentation.
+- [ ] Build placement, guarantee, replacement, invoice, payment-status, and dispute workspaces with approval states.
+- [x] Build policy, approval, audit-log, exception-center, and emergency-stop control-plane workspaces.
+- [ ] Create test-safe seed/demo records that are plainly marked as operational samples and contain no fabricated reviews, ratings, or testimonials.
+- [ ] Add Vitest coverage for core state transitions, consent gating, audit event creation, approval-required actions, queue idempotency, and OpenRouter response validation.
+- [x] Validate TypeScript, run unit tests, and resolve all application build errors.
+- [ ] Verify the desktop and mobile dashboard through screenshots and improve visible layout/accessibility issues.
+- [x] Write Hostinger Business Node.js deployment documentation, environment-variable inventory, domain configuration steps for freelancehr.overseasjob.in, and cron/queue guidance.
+- [ ] Read the complete TODO list, confirm all completed items are marked accurately, save a final project checkpoint, and deliver the project summary.
+- [x] Implement and verify OpenRouter daily quota budgets and status calculations, then surface them in Command Center.
+- [x] Add weighted scorecard criteria fields and persistence to the job-intake workflow.
+- [x] Add candidate search and filter controls with a typed backend query procedure.
+- [ ] Complete and verify policy management, audit-log, and exception-center workspaces plus their backing procedures.
+- [ ] Extend audit coverage verification for all consequential workflows, including disputes, credits, and final candidate-decision controls.
+- [ ] Add a complete screening router/workspace with list, detail, state, evidence, and owner-decision procedures, plus a dedicated shortlist query/update surface.
+- [ ] Implement correction and deletion-request fulfillment: resolve rights requests, apply candidate profile corrections, perform tracked deletion, and expose the workflow in the control plane.
+- [ ] Add candidate filter controls for profile state, source, availability, and do-not-contact/withdrawn records, with typed backend filtering.

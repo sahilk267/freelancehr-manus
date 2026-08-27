@@ -1,92 +1,103 @@
-import { eq } from "drizzle-orm";
+import { createHash } from "crypto";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { nanoid } from "nanoid";
+import {
+  auditEvents,
+  type InsertUser,
+  type User,
+  users,
+  workspaceSettings,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+    _db = drizzle(process.env.DATABASE_URL);
   }
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+export async function requireDb() {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  if (!db) throw new Error("Database connection is not available");
+  return db;
+}
 
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
+export function createId(prefix = "") {
+  return `${prefix}${nanoid(20)}`.slice(0, 36);
+}
 
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
+export function hashContactValue(value: string) {
+  return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
+}
 
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+export async function upsertUser(user: InsertUser): Promise<void> {
+  if (!user.openId) throw new Error("User openId is required for upsert");
+  const db = await requireDb();
+  const values: InsertUser = { ...user, openId: user.openId };
+  if (!values.role && user.openId === ENV.ownerOpenId) values.role = "admin";
+  if (!values.lastSignedIn) values.lastSignedIn = new Date();
+  await db.insert(users).values(values).onDuplicateKeyUpdate({
+    set: {
+      name: values.name,
+      email: values.email,
+      loginMethod: values.loginMethod,
+      role: values.role,
+      lastSignedIn: values.lastSignedIn,
+    },
+  });
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  return result[0];
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function ensureWorkspace(ownerId: number) {
+  const db = await requireDb();
+  const existing = await db.select().from(workspaceSettings).where(eq(workspaceSettings.ownerId, ownerId)).limit(1);
+  if (existing[0]) return existing[0];
+  await db.insert(workspaceSettings).values({ ownerId });
+  const created = await db.select().from(workspaceSettings).where(eq(workspaceSettings.ownerId, ownerId)).limit(1);
+  return created[0]!;
+}
+
+export async function recordAudit(input: {
+  ownerId: number;
+  actorType: "user" | "ai" | "system" | "cron" | "provider";
+  actorId?: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  previousState?: string | null;
+  nextState?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const db = await requireDb();
+  const id = createId("aud_");
+  await db.insert(auditEvents).values({
+    id,
+    ownerId: input.ownerId,
+    actorType: input.actorType,
+    actorId: input.actorId ?? null,
+    action: input.action,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    previousState: input.previousState ?? null,
+    nextState: input.nextState ?? null,
+    metadata: input.metadata ?? null,
+  });
+  return id;
+}
+
+export async function getRecentAudits(ownerId: number, limit = 12) {
+  const db = await requireDb();
+  return db.select().from(auditEvents).where(eq(auditEvents.ownerId, ownerId)).orderBy(desc(auditEvents.createdAt)).limit(limit);
+}
+
+export type CurrentUser = User;

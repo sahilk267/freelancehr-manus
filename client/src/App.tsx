@@ -1,42 +1,43 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import NotFound from "./pages/NotFound";
+import { CandidatesPage, ControlPlanePage, ExceptionsPage, FinancePage, InterviewsPage, JobsPage, PlacementsPage, ProspectsPage } from "./pages/WorkspaceViews";
+
+function withDashboard(Page: React.ComponentType) {
+  return () => <DashboardLayout><Page /></DashboardLayout>;
+}
+
+const CommandCenter = withDashboard(Home);
+const Prospects = withDashboard(ProspectsPage);
+const Jobs = withDashboard(JobsPage);
+const Candidates = withDashboard(CandidatesPage);
+const Interviews = withDashboard(InterviewsPage);
+const Placements = withDashboard(PlacementsPage);
+const Finance = withDashboard(FinancePage);
+const Exceptions = withDashboard(ExceptionsPage);
+const ControlPlane = withDashboard(ControlPlanePage);
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
-  return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
-  );
+  return <Switch>
+    <Route path="/" component={CommandCenter} />
+    <Route path="/prospects" component={Prospects} />
+    <Route path="/jobs" component={Jobs} />
+    <Route path="/candidates" component={Candidates} />
+    <Route path="/interviews" component={Interviews} />
+    <Route path="/placements" component={Placements} />
+    <Route path="/finance" component={Finance} />
+    <Route path="/exceptions" component={Exceptions} />
+    <Route path="/control" component={ControlPlane} />
+    <Route path="/404" component={NotFound} />
+    <Route component={NotFound} />
+  </Switch>;
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
+export default function App() {
+  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
 }
-
-export default App;
