@@ -12,7 +12,7 @@ The managed development template includes platform-specific authentication and s
 | Database | Hostinger MySQL or a managed MySQL-compatible database with TLS | Do not expose database credentials in the React application |
 | Candidate documents | Private S3-compatible bucket with signed GET/PUT endpoints and malware scanning | Do not retain CVs in public web directories or database BLOBs |
 | AI | `OPENROUTER_API_KEY` held only in Node environment variables | Do not use `VITE_OPENROUTER_API_KEY` or call OpenRouter directly from browser code |
-| Email | Approved transactional email provider with DKIM/SPF/DMARC | Do not enable mass outreach through shared-host mail without consent/opt-out controls |
+| Email | Hostinger Mail API bearer token, restricted mailbox resource IDs, webhook secret, and verified SPF/DKIM/DMARC | Do not enable mass outreach or invite delivery until API verification and controlled delivery tests pass |
 | Calendar | Google/Microsoft Calendar OAuth integration | Do not mark calendar events sent until provider confirmation is recorded |
 | Payments | Payment/bank reconciliation provider or controlled manual ledger | Do not issue credit, write-off, or mark paid automatically |
 
@@ -49,8 +49,29 @@ STORAGE_BUCKET=<private-bucket-name>
 STORAGE_REGION=<region>
 STORAGE_ACCESS_KEY_ID=<server-side-only>
 STORAGE_SECRET_ACCESS_KEY=<server-side-only>
-EMAIL_PROVIDER_API_KEY=<server-side-only>
+HOSTINGER_MAIL_API_TOKEN=<server-side-only>
+HOSTINGER_MAIL_FROM_DOMAIN=overseasjob.in
+HOSTINGER_MAILBOX_OWNER_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_CLIENTS_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_TALENT_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_INTERVIEWS_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_FINANCE_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_PRIVACY_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAIL_WEBHOOK_SECRET=<one-time webhook bearer secret>
 ```
+
+## Team access and invitation safety
+
+The `teamMembers` and `teamInvitations` migration introduces an **owner-managed, least-privilege** membership register. A pending invitation stores only a SHA-256 hash of its one-time code, has a fixed expiry, and is invalidated if the owner revokes the membership. The application currently creates auditable invitation records and displays a one-time code for manual secure sharing; it does **not** send invitation emails until the Hostinger Mail API is fully configured and verified.
+
+| Role | Permitted scope | Always reserved for owner |
+| --- | --- | --- |
+| Recruiter | Prepare recruitment records, drafts, and approval requests | Candidate sharing, final disposition, client onboarding, external sends, placement and commercial decisions |
+| Coordinator | Interview operations, notes, reminders drafts | All approvals, candidate/client external actions, policy changes |
+| Finance | Finance evidence and controlled approval requests | Invoice issuance, payment/credit/dispute final state, external sends |
+| Viewer | Read-only visibility after production shared-workspace authorization is implemented | All modifications and all approval controls |
+
+For a **fresh production database**, apply the project migrations exactly once, including `0003_soft_blindfold.sql`. The development database received the additive team tables in dependency order because the generated first draft ordered its dependent foreign key before its referenced table; the checked-in production migration has the corrected order. Do not replay a migration against a database where its tables already exist.
 
 ## Automation and cron
 
@@ -64,4 +85,4 @@ In Hostinger hPanel, add `freelancehr.overseasjob.in` as a subdomain or Node app
 
 ## Pre-launch go/no-go
 
-The system must not go live until the team has confirmed: the owner sign-in flow; database backups and restoration test; private document access test; consent withdrawal and suppression test; OpenRouter quota/fallback failure test; owner approval test; email opt-out handling; TLS verification; no secrets in frontend bundles; and the emergency-stop drill. A successful `pnpm check` and `pnpm test` are necessary but not sufficient for this production approval.
+The system must not go live until the team has confirmed: the owner sign-in flow; production shared-workspace authorization for invited members; database backups and restoration test; private document access test; consent withdrawal and suppression test; OpenRouter quota/fallback failure test; owner approval test; Hostinger Mail API verification, controlled test delivery, webhook payload validation, and email opt-out handling; TLS verification; no secrets in frontend bundles; and the emergency-stop drill. A successful `pnpm check` and `pnpm test` are necessary but not sufficient for this production approval.

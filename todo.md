@@ -65,8 +65,22 @@
 - [x] Rename the control-plane mail health and configuration language from SMTP/IMAP to Hostinger Mail API.
 - [x] Update tests and Hostinger deployment documentation for Hostinger Mail API credentials, endpoint paths, sender verification, and inbound webhooks/events.
 - [ ] Validate the live Hostinger Mail API connection, sender identities, outbound approval flow, and inbound events after the user provides API access details.
+- [ ] Receive the Hostinger Mail API token, mailbox resource IDs, and webhook secret through secure configuration when the user is ready.
 - [x] Implement a Hostinger Mail API inbound webhook endpoint with secret validation, provider-payload normalization, and safe malformed-event handling.
 - [x] Enqueue accepted inbound replies for controlled classification and persist a corresponding audit event.
 - [x] Add tests for Hostinger inbound webhook validation, provider-thread correlation, malformed-event routing, and classification-queue creation.
 - [x] Add persistence-level tests that assert matched Hostinger inbound events create classification jobs and audit records.
 - [x] Add webhook tests for unmatched-event incident routing and safe accepted responses.
+- [x] Enforce owner, recruiter, coordinator, finance, and read-only team roles with explicit controlled-action permissions across workspace workflows.
+- [x] Add team membership and invitation tables with scoped status, expiry, revocation, and audit fields.
+- [x] Reconcile and record the non-destructive team-access migration in Drizzle tracking for safe existing and fresh-environment deployment.
+- [x] Implement protected team management procedures for invite creation, membership activation, role update, revocation, and activity listing.
+- [x] Build a responsive Team & access workspace with member status, invitation controls, role summaries, revocation, and recent member activity.
+- [x] Prevent live invite delivery until the Hostinger Mail API activation is complete; create only auditable invitation records meanwhile.
+- [x] Add unit tests for owner-only team administration, role guardrails, invitation expiry, revocation, and audit events.
+- [x] Add team-access documentation and run TypeScript, Vitest, production-build, desktop, and mobile validation.
+- [x] Implement workspace membership resolution and role-based authorization across protected routers so displayed role permissions are actually enforced.
+- [x] Add role-permission tests for recruitment preparation, coordinator operations, finance preparation, viewer read-only behavior, and owner-only consequential actions.
+- [x] Add an integration test proving a team member receives a forbidden response from a real owner-only consequential recruitment procedure.
+- [ ] Read the team-access TODO items, save a checkpoint, and deliver the implementation status.
+- [ ] Replace development authentication and document-storage dependencies with selected production OIDC/session and private object-storage services before deploying to Hostinger.

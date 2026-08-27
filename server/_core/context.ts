@@ -1,11 +1,14 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import type { WorkspaceAccess } from "../services/workspaceAccess";
 import { sdk } from "./sdk";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
   user: User | null;
+  actor: User | null;
+  workspace: WorkspaceAccess | null;
 };
 
 export async function createContext(
@@ -24,5 +27,7 @@ export async function createContext(
     req: opts.req,
     res: opts.res,
     user,
+    actor: user,
+    workspace: null,
   };
 }

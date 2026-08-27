@@ -20,7 +20,7 @@ async function createFastifyContext({ req, res }: { req: { raw: unknown }; res: 
   } catch {
     user = null;
   }
-  return { req: req.raw, res: res.raw, user } as never;
+  return { req: req.raw, res: res.raw, user, actor: user, workspace: null } as never;
 }
 
 async function start() {

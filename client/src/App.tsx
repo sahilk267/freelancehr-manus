@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
-import { CandidatesPage, ControlPlanePage, ExceptionsPage, FinancePage, InterviewsPage, JobsPage, PlacementsPage, ProspectsPage } from "./pages/WorkspaceViews";
+import { CandidatesPage, ControlPlanePage, ExceptionsPage, FinancePage, InterviewsPage, JobsPage, PlacementsPage, ProspectsPage, TeamPage } from "./pages/WorkspaceViews";
 
 function withDashboard(Page: React.ComponentType) {
   return () => <DashboardLayout><Page /></DashboardLayout>;
@@ -20,6 +20,7 @@ const Interviews = withDashboard(InterviewsPage);
 const Placements = withDashboard(PlacementsPage);
 const Finance = withDashboard(FinancePage);
 const Exceptions = withDashboard(ExceptionsPage);
+const Team = withDashboard(TeamPage);
 const ControlPlane = withDashboard(ControlPlanePage);
 
 function Router() {
@@ -32,6 +33,7 @@ function Router() {
     <Route path="/placements" component={Placements} />
     <Route path="/finance" component={Finance} />
     <Route path="/exceptions" component={Exceptions} />
+    <Route path="/team" component={Team} />
     <Route path="/control" component={ControlPlane} />
     <Route path="/404" component={NotFound} />
     <Route component={NotFound} />

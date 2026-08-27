@@ -10,6 +10,7 @@ import {
   workspaceSettings,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { getAuditActor } from "./services/actorContext";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -80,17 +81,23 @@ export async function recordAudit(input: {
 }) {
   const db = await requireDb();
   const id = createId("aud_");
+  const requestActor = getAuditActor();
+  const actorId = input.actorType === "user" && requestActor ? String(requestActor.userId) : input.actorId ?? null;
+  const metadata = {
+    ...(input.metadata ?? {}),
+    ...(input.actorType === "user" && requestActor && requestActor.userId !== input.ownerId ? { actingRole: requestActor.role, actingForOwnerId: requestActor.workspaceOwnerId } : {}),
+  };
   await db.insert(auditEvents).values({
     id,
     ownerId: input.ownerId,
     actorType: input.actorType,
-    actorId: input.actorId ?? null,
+    actorId,
     action: input.action,
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     previousState: input.previousState ?? null,
     nextState: input.nextState ?? null,
-    metadata: input.metadata ?? null,
+    metadata,
   });
   return id;
 }

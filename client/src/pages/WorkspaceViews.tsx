@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "../_core/hooks/useAuth";
 import { AlertTriangle, ArrowRight, BadgeCheck, Ban, BrainCircuit, Building2, CalendarClock, Check, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FileCheck2, FileWarning, Gavel, LockKeyhole, Mail, Plus, RefreshCcw, Send, ShieldAlert, SlidersHorizontal, UserCheck, UsersRound, X } from "lucide-react";
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -209,4 +210,77 @@ export function ControlPlanePage() {
         <Card className="border-slate-200 bg-white"><CardContent className="p-5"><SectionTitle icon={FileCheck2} title="Immutable audit history" detail="Every state change, approval, consent event, and operational decision leaves an evidence record." /><div className="mt-5 divide-y divide-slate-100">{audits.length === 0 ? <Empty title="Audit trail will grow automatically" detail="Start working through the pipelines and each controlled state change will appear here." icon={FileCheck2} /> : audits.map(item => <div className="flex items-center justify-between gap-4 py-3" key={item.id}><div><p className="text-sm font-medium text-[#10213d]">{item.action.replaceAll(".", " · ")}</p><p className="mt-1 text-xs text-slate-500">{item.resourceType} · {dateTime(item.createdAt)}</p></div><StateBadge value={item.actorType} /></div>)}</div></CardContent></Card></div>
     </div>
   </PageShell>;
+}
+
+function OwnerTeamPage() {
+  const utils = trpc.useUtils();
+  const { data: overview, isLoading, error } = trpc.team.overview.useQuery();
+  const { data: activity = [] } = trpc.team.activity.useQuery({ limit: 30 }, { enabled: Boolean(overview) });
+  const invite = trpc.team.invite.useMutation({
+    onSuccess: result => {
+      utils.team.overview.invalidate();
+      utils.team.activity.invalidate();
+      setIssuedInvite(result);
+      toast.success("Invitation record created. Share the one-time code only through a secure channel.");
+    },
+  });
+  const updateRole = trpc.team.updateRole.useMutation({ onSuccess: () => { utils.team.overview.invalidate(); utils.team.activity.invalidate(); toast.success("Team role updated with an audit record."); } });
+  const revoke = trpc.team.revoke.useMutation({ onSuccess: () => { utils.team.overview.invalidate(); utils.team.activity.invalidate(); toast.success("Member access and pending invitations have been revoked."); } });
+  const [issuedInvite, setIssuedInvite] = useState<{ invitationCode: string; expiresAt: Date } | null>(null);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    invite.mutate({
+      email: String(form.get("email")),
+      displayName: String(form.get("displayName")).trim() || undefined,
+      role: String(form.get("role")) as "recruiter" | "coordinator" | "finance" | "viewer",
+      expiresInHours: Number(form.get("expiresInHours") || 168),
+    });
+    event.currentTarget.reset();
+    setShowInviteForm(false);
+  };
+  const copyCode = async () => {
+    if (!issuedInvite) return;
+    try { await navigator.clipboard.writeText(issuedInvite.invitationCode); toast.success("Invitation code copied. It is not retained after this view is dismissed."); }
+    catch { toast.error("Copy is unavailable in this browser. Select the code manually and share it securely."); }
+  };
+
+  if (isLoading) return <div className="py-10 text-sm text-slate-500">Loading team access controls…</div>;
+  if (error || !overview) return <PageShell eyebrow="Workspace security" title="Team & access" description="This area is available only to the workspace owner. Team members cannot administer membership, approvals, policies, or sending controls."><Empty title="Owner access required" detail="Sign in with the primary workspace owner account to manage team invitations and roles." icon={LockKeyhole} /></PageShell>;
+
+  return <PageShell eyebrow="Workspace security" title="Team & access" description="Create traceable, least-privilege team memberships. Consequential approvals, final candidate decisions, client sharing, email sends, and policy controls remain owner-only." action={<Button onClick={() => setShowInviteForm(value => !value)} className="bg-[#10213d] hover:bg-[#1a3156]"><Plus className="mr-2 h-4 w-4" />Invite team member</Button>}>
+    <div className="grid gap-4 md:grid-cols-3"><Card className="border-slate-200 bg-white"><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a47d2c]">Active memberships</p><p className="mt-3 text-3xl font-semibold text-[#10213d]">{overview.activeMemberCount}</p><p className="mt-1 text-xs text-slate-500">Activated team accounts</p></CardContent></Card><Card className="border-slate-200 bg-white"><CardContent className="p-5"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a47d2c]">Pending invitations</p><p className="mt-3 text-3xl font-semibold text-[#10213d]">{overview.pendingInvitations.length}</p><p className="mt-1 text-xs text-slate-500">Automatically marked expired after the deadline</p></CardContent></Card><Card className="border-[#f5d77b] bg-[#fffaf0]"><CardContent className="p-5"><div className="flex items-center gap-2 text-sm font-semibold text-[#10213d]"><Mail className="h-4 w-4 text-[#a47d2c]" />Invite delivery</div><p className="mt-3 text-xs leading-5 text-slate-600">Live invitation email is intentionally disabled until the Hostinger Mail API is activated. Share the one-time code manually through an approved secure channel.</p></CardContent></Card></div>
+
+    {showInviteForm && <FormCard title="Create an auditable team invitation" detail="The invitation contains a one-time activation code. No email is sent automatically, and owner-only controls are never delegated."><form onSubmit={submit} className="grid gap-3 md:grid-cols-2"><div><Label>Team member name</Label><Input name="displayName" placeholder="Aman Sharma" /></div><div><Label>Work email</Label><Input name="email" type="email" required placeholder="aman@example.com" /></div><div><Label>Role</Label><select name="role" defaultValue="recruiter" className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="recruiter">Recruiter — prepares records and approval requests</option><option value="coordinator">Coordinator — interviews and operations</option><option value="finance">Finance — invoice evidence and approval requests</option><option value="viewer">Viewer — visibility only</option></select></div><div><Label>Expires in (hours)</Label><Input name="expiresInHours" type="number" min="12" max="720" defaultValue="168" /></div><div className="md:col-span-2 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setShowInviteForm(false)}>Cancel</Button><Button type="submit" disabled={invite.isPending} className="bg-[#10213d]">Create secure invitation</Button></div></form></FormCard>}
+
+    {issuedInvite && <Card className="border-[#a47d2c]/40 bg-[#10213d] text-white"><CardContent className="p-5"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><div className="flex items-center gap-2 text-sm font-semibold text-[#f5d77b]"><LockKeyhole className="h-4 w-4" />One-time activation code</div><p className="mt-2 max-w-2xl text-xs leading-5 text-slate-300">Copy and share this code only via an approved secure channel. The stored record contains a hash, not the code itself. It expires {dateTime(issuedInvite.expiresAt)}.</p><code className="mt-4 block max-w-full overflow-x-auto rounded-lg bg-white/10 px-3 py-2 text-sm text-white">{issuedInvite.invitationCode}</code></div><div className="flex shrink-0 gap-2"><Button size="sm" variant="outline" className="border-white/25 text-white hover:bg-white/10 hover:text-white" onClick={copyCode}>Copy code</Button><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => setIssuedInvite(null)}>Dismiss</Button></div></div></CardContent></Card>}
+
+    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-slate-200 bg-white"><CardContent className="p-5"><SectionTitle icon={UsersRound} title="Membership register" detail="Role changes and revocations are appended to the workspace audit trail. Revocation also invalidates all pending invitations for that member." /><div className="mt-5 overflow-x-auto">{overview.members.length === 0 ? <Empty title="No team members yet" detail="Create an invitation when you are ready to grant a limited operational role." icon={UsersRound} /> : <table className="w-full min-w-[760px] text-left"><thead className="border-b border-slate-100 text-[11px] uppercase tracking-[0.1em] text-slate-400"><tr><th className="pb-3">Member</th><th className="pb-3">Role</th><th className="pb-3">Status</th><th className="pb-3">Joined</th><th className="pb-3">Control</th></tr></thead><tbody className="divide-y divide-slate-100">{overview.members.map(member => <tr key={member.id}><td className="py-4"><p className="font-semibold text-[#10213d]">{member.displayName || "Pending team member"}</p><p className="mt-1 text-xs text-slate-500">{member.email}</p></td><td className="py-4">{member.role === "owner" ? <span className="text-xs font-semibold text-[#10213d]">Owner</span> : <select aria-label={`Role for ${member.email}`} value={member.role} disabled={member.status === "revoked" || updateRole.isPending} onChange={event => updateRole.mutate({ memberId: member.id, role: event.target.value as "recruiter" | "coordinator" | "finance" | "viewer" })} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"><option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="finance">Finance</option><option value="viewer">Viewer</option></select>}</td><td className="py-4"><StateBadge value={member.status} /></td><td className="py-4 text-xs text-slate-500">{dateTime(member.joinedAt)}</td><td className="py-4">{member.status !== "revoked" && member.role !== "owner" ? <Button size="sm" variant="outline" disabled={revoke.isPending} onClick={() => revoke.mutate({ memberId: member.id, reason: "Owner revoked team workspace access" })}>Revoke</Button> : <span className="text-xs text-slate-400">—</span>}</td></tr>)}</tbody></table>}</div></CardContent></Card>
+      <div className="space-y-6"><Card className="border-slate-200 bg-white"><CardContent className="p-5"><SectionTitle icon={ShieldAlert} title="Role boundaries" detail="Roles are designed for preparation and visibility. They cannot approve the actions that create employment, commercial, privacy, or external communication consequences." /><div className="mt-4 space-y-3">{Object.entries(overview.permissionSummary).map(([role, permissions]) => <div key={role} className="rounded-xl bg-[#f7f5f0] p-3"><p className="text-xs font-semibold capitalize text-[#10213d]">{role}</p><p className="mt-1 text-[11px] leading-5 text-slate-500">{permissions.join(" · ")}</p></div>)}</div></CardContent></Card><Card className="border-slate-200 bg-white"><CardContent className="p-5"><SectionTitle icon={FileCheck2} title="Team access audit" detail="Recent team invitation, role, activation, and revocation events." /><div className="mt-4 space-y-2">{activity.length === 0 ? <p className="text-xs text-slate-500">No team-access events have been recorded yet.</p> : activity.map(event => <div key={event.id} className="rounded-xl bg-[#f7f5f0] px-3 py-2"><p className="text-xs font-medium text-[#10213d]">{event.action.replaceAll(".", " · ")}</p><p className="mt-1 text-[11px] text-slate-500">{dateTime(event.createdAt)} · {event.resourceType}</p></div>)}</div></CardContent></Card></div>
+    </div>
+  </PageShell>;
+}
+
+function MemberTeamAccess() {
+  const utils = trpc.useUtils();
+  const { data: access, isLoading } = trpc.team.myAccess.useQuery();
+  const accept = trpc.team.accept.useMutation({
+    onSuccess: result => {
+      try { sessionStorage.setItem("freelancehr-active-workspace", String(result.ownerId)); } catch { /* session storage is optional */ }
+      utils.team.myAccess.invalidate();
+      toast.success(`Workspace access activated as ${result.role}. Reloading your controlled workspace.`);
+      window.setTimeout(() => window.location.reload(), 700);
+    },
+  });
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const code = String(new FormData(event.currentTarget).get("invitationCode") || ""); accept.mutate({ invitationCode: code }); };
+  if (isLoading) return <div className="py-10 text-sm text-slate-500">Checking team workspace access…</div>;
+  if (access) return <PageShell eyebrow="Workspace security" title="Team workspace activated" description={`You are assigned the ${access.role} role in a controlled FreelanceHR workspace. The server enforces your permitted routes; owner approvals, external delivery, privacy controls, and final candidate outcomes remain unavailable to team roles.`}><Card className="border-slate-200 bg-white"><CardContent className="p-6"><SectionTitle icon={ShieldAlert} title="Scoped operational access" detail="Use the workspace navigation for the operations that match your role. Attempts to access a restricted route are blocked and remain auditable." /><div className="mt-5 rounded-2xl bg-[#f7f5f0] p-4"><p className="text-sm font-semibold capitalize text-[#10213d]">{access.role} permissions</p><p className="mt-2 text-xs leading-5 text-slate-600">{access.permissions.join(" · ")}</p></div></CardContent></Card></PageShell>;
+  return <PageShell eyebrow="Workspace security" title="Join a team workspace" description="Enter the one-time invitation code that the workspace owner shared through an approved secure channel. The code is bound to your signed-in email and expires automatically."><div className="mx-auto max-w-xl"><FormCard title="Activate invitation" detail="No invitation email is sent until Hostinger Mail API activation is complete. Never paste a code into email or an unapproved channel."><form onSubmit={submit} className="space-y-4"><div><Label>One-time invitation code</Label><Input name="invitationCode" required minLength={24} placeholder="Paste the code provided by the owner" autoComplete="off" /></div><Button type="submit" disabled={accept.isPending} className="bg-[#10213d]">Activate controlled workspace access</Button></form></FormCard></div></PageShell>;
+}
+
+export function TeamPage() {
+  const { user } = useAuth();
+  if (user?.role !== "admin") return <MemberTeamAccess />;
+  return <OwnerTeamPage />;
 }

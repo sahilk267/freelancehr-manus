@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
 import {
   Activity,
   BadgeDollarSign,
@@ -50,8 +51,16 @@ const menuItems = [
   { icon: ShieldCheck, label: "Placements", path: "/placements" },
   { icon: BadgeDollarSign, label: "Finance", path: "/finance" },
   { icon: CircleAlert, label: "Exceptions", path: "/exceptions" },
+  { icon: UsersRound, label: "Team & access", path: "/team" },
   { icon: Settings2, label: "Control Plane", path: "/control" },
 ];
+
+const memberPaths = {
+  recruiter: new Set(["/", "/prospects", "/jobs", "/candidates", "/interviews", "/team"]),
+  coordinator: new Set(["/", "/candidates", "/interviews", "/team"]),
+  finance: new Set(["/", "/placements", "/finance", "/team"]),
+  viewer: new Set(["/", "/prospects", "/jobs", "/candidates", "/interviews", "/placements", "/finance", "/team"]),
+} as const;
 
 const SIDEBAR_WIDTH_KEY = "freelancehr-sidebar-width";
 const DEFAULT_WIDTH = 278;
@@ -90,12 +99,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function DashboardLayoutContent({ children, setSidebarWidth }: { children: React.ReactNode; setSidebarWidth: (width: number) => void }) {
   const { user, logout } = useAuth();
+  const { data: memberAccess } = trpc.team.myAccess.useQuery(undefined, { enabled: Boolean(user && user.role !== "admin") });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
+  const permittedMemberPaths = memberAccess && memberAccess.role !== "owner" ? memberPaths[memberAccess.role] : null;
+  const visibleMenuItems = user?.role === "admin" || memberAccess?.role === "owner" ? menuItems : permittedMemberPaths ? menuItems.filter(item => permittedMemberPaths.has(item.path)) : menuItems.filter(item => item.path === "/team");
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -137,7 +149,7 @@ function DashboardLayoutContent({ children, setSidebarWidth }: { children: React
           <SidebarContent className="gap-0 px-3">
             {!isCollapsed && <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Workspace</p>}
             <SidebarMenu className="gap-1">
-              {menuItems.map(item => {
+              {visibleMenuItems.map(item => {
                 const active = location === item.path;
                 return <SidebarMenuItem key={item.path}><SidebarMenuButton isActive={active} onClick={() => setLocation(item.path)} tooltip={item.label} className={`h-10 rounded-xl px-3 text-slate-300 transition-all hover:bg-white/10 hover:text-white data-[active=true]:bg-[#f5d77b] data-[active=true]:text-[#10213d] ${active ? "font-semibold" : ""}`}><item.icon className="h-4 w-4" /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>;
               })}

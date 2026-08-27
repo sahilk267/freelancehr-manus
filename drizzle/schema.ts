@@ -624,5 +624,45 @@ export const incidents = mysqlTable(
   table => [index("incident_owner_status_idx").on(table.ownerId, table.status)],
 );
 
+export const teamMembers = mysqlTable(
+  "teamMembers",
+  {
+    id: id("id").primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id),
+    memberUserId: int("memberUserId").references(() => users.id),
+    email: varchar("email", { length: 320 }).notNull(),
+    displayName: varchar("displayName", { length: 160 }),
+    role: mysqlEnum("role", ["owner", "recruiter", "coordinator", "finance", "viewer"]).notNull().default("recruiter"),
+    status: mysqlEnum("status", ["invited", "active", "revoked"]).notNull().default("invited"),
+    permissionOverrides: json("permissionOverrides"),
+    joinedAt: timestamp("joinedAt"),
+    revokedAt: timestamp("revokedAt"),
+    createdById: int("createdById").notNull().references(() => users.id),
+    createdAt,
+    updatedAt,
+  },
+  table => [uniqueIndex("team_member_owner_email_unique").on(table.ownerId, table.email), index("team_member_owner_status_idx").on(table.ownerId, table.status)],
+);
+
+export const teamInvitations = mysqlTable(
+  "teamInvitations",
+  {
+    id: id("id").primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id),
+    memberId: id("memberId").notNull().references(() => teamMembers.id),
+    email: varchar("email", { length: 320 }).notNull(),
+    role: mysqlEnum("role", ["owner", "recruiter", "coordinator", "finance", "viewer"]).notNull(),
+    tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+    status: mysqlEnum("status", ["pending", "accepted", "revoked", "expired"]).notNull().default("pending"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    acceptedAt: timestamp("acceptedAt"),
+    revokedAt: timestamp("revokedAt"),
+    createdById: int("createdById").notNull().references(() => users.id),
+    createdAt,
+    updatedAt,
+  },
+  table => [index("team_invite_owner_status_idx").on(table.ownerId, table.status), index("team_invite_member_idx").on(table.memberId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
