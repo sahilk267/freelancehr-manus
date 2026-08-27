@@ -586,6 +586,24 @@ export const rightsRequests = mysqlTable(
   table => [index("rights_owner_status_idx").on(table.ownerId, table.status)],
 );
 
+export const emailIdentities = mysqlTable(
+  "emailIdentities",
+  {
+    id: id("id").primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id),
+    email: varchar("email", { length: 320 }).notNull(),
+    purpose: mysqlEnum("purpose", ["owner", "clients", "talent", "interviews", "finance", "privacy"]).notNull(),
+    status: mysqlEnum("status", ["draft", "active", "disabled", "unverified"]).notNull().default("draft"),
+    displayName: varchar("displayName", { length: 160 }).notNull().default("FreelanceHR"),
+    replyTo: varchar("replyTo", { length: 320 }),
+    lastHealthCheckAt: timestamp("lastHealthCheckAt"),
+    lastHealthStatus: varchar("lastHealthStatus", { length: 64 }),
+    createdAt,
+    updatedAt,
+  },
+  table => [uniqueIndex("email_identity_owner_email_unique").on(table.ownerId, table.email), index("email_identity_owner_status_idx").on(table.ownerId, table.status)],
+);
+
 export const incidents = mysqlTable(
   "incidents",
   {

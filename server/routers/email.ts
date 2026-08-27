@@ -1,0 +1,90 @@
+import { TRPCError } from "@trpc/server";
+import { and, desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { approvals, conversations, emailIdentities, incidents, messages, suppressionList } from "../../drizzle/schema";
+import { createId, hashContactValue, recordAudit, requireDb } from "../db";
+import { detectOptOut, getSmtpStatus, isApprovedSenderAddress, sendApprovedEmail, verifySmtpTransport, EMAIL_PURPOSES } from "../services/email";
+import { protectedProcedure, router } from "../_core/trpc";
+
+const identityInput = z.object({ email: z.string().email(), purpose: z.enum(EMAIL_PURPOSES), displayName: z.string().trim().min(2).max(160).default("FreelanceHR"), replyTo: z.string().email().optional() });
+
+export const emailRouter = router({
+  status: protectedProcedure.query(() => getSmtpStatus()),
+  identities: router({
+    list: protectedProcedure.query(async ({ ctx }) => (await requireDb()).select().from(emailIdentities).where(eq(emailIdentities.ownerId, ctx.user.id)).orderBy(emailIdentities.purpose)),
+    save: protectedProcedure.input(identityInput).mutation(async ({ ctx, input }) => {
+      if (!isApprovedSenderAddress(input.email)) throw new TRPCError({ code: "BAD_REQUEST", message: "Sender must use the configured approved domain." });
+      const db = await requireDb(); const existing = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.ownerId, ctx.user.id), eq(emailIdentities.email, input.email))).limit(1))[0];
+      const id = existing?.id ?? createId("eid_");
+      if (existing) await db.update(emailIdentities).set({ purpose: input.purpose, displayName: input.displayName, replyTo: input.replyTo ?? null }).where(eq(emailIdentities.id, id));
+      else await db.insert(emailIdentities).values({ id, ownerId: ctx.user.id, ...input, status: "unverified" });
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.identity_saved", resourceType: "email_identity", resourceId: id, metadata: { email: input.email, purpose: input.purpose } });
+      return { id };
+    }),
+    setStatus: protectedProcedure.input(z.object({ id: z.string().min(4), status: z.enum(["active", "disabled", "unverified"]) })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb(); const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.id), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
+      if (!identity) throw new TRPCError({ code: "NOT_FOUND", message: "Email identity was not found." });
+      if (input.status === "active" && !getSmtpStatus().configured) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Add SMTP credentials before activating a sender." });
+      await db.update(emailIdentities).set({ status: input.status, lastHealthCheckAt: new Date(), lastHealthStatus: input.status === "active" ? "configured" : "disabled" }).where(eq(emailIdentities.id, identity.id));
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.identity_status_changed", resourceType: "email_identity", resourceId: identity.id, previousState: identity.status, nextState: input.status });
+      return { success: true };
+    }),
+    verify: protectedProcedure.input(z.object({ id: z.string().min(4) })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb(); const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.id), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
+      if (!identity) throw new TRPCError({ code: "NOT_FOUND", message: "Email identity was not found." });
+      const result = await verifySmtpTransport();
+      await db.update(emailIdentities).set({ lastHealthCheckAt: new Date(), lastHealthStatus: result.status, status: result.ok ? "active" : "unverified" }).where(eq(emailIdentities.id, identity.id));
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.smtp_verified", resourceType: "email_identity", resourceId: identity.id, previousState: identity.status, nextState: result.ok ? "active" : "unverified", metadata: { result: result.status } });
+      return result;
+    }),
+  }),
+  outbound: router({
+    requestApproval: protectedProcedure.input(z.object({ conversationId: z.string().min(4), senderIdentityId: z.string().min(4), recipient: z.string().email(), subject: z.string().trim().min(1).max(255), body: z.string().trim().min(8).max(12000) })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.senderIdentityId), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
+      if (!identity || identity.status !== "active") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Select an active, approved sender identity." });
+      const blocked = (await db.select().from(suppressionList).where(and(eq(suppressionList.ownerId, ctx.user.id), eq(suppressionList.channel, "email"), eq(suppressionList.valueHash, hashContactValue(input.recipient)))).limit(1))[0];
+      if (blocked?.active) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Recipient is suppressed and cannot receive outreach." });
+      const messageId = createId("msg_"); const approvalId = createId("apr_");
+      await db.insert(messages).values({ id: messageId, conversationId: input.conversationId, ownerId: ctx.user.id, direction: "outbound", status: "approval_pending", subject: input.subject, body: input.body, idempotencyKey: `email:${messageId}`, aiGenerated: false });
+      await db.insert(approvals).values({ id: approvalId, ownerId: ctx.user.id, requestedBy: "user", actionType: "email_send", resourceType: "message", resourceId: messageId, status: "pending", reason: "Every external recruitment email requires explicit owner approval.", payload: { senderIdentityId: identity.id, recipient: input.recipient } });
+      await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "email.send_approval_requested", resourceType: "message", resourceId: messageId, nextState: "approval_pending", metadata: { approvalId, sender: identity.email, recipient: input.recipient } });
+      return { messageId, approvalId };
+    }),
+    deliverApproved: protectedProcedure.input(z.object({ messageId: z.string().min(4), senderIdentityId: z.string().min(4), recipient: z.string().email() })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const message = (await db.select().from(messages).where(and(eq(messages.id, input.messageId), eq(messages.ownerId, ctx.user.id))).limit(1))[0];
+      const identity = (await db.select().from(emailIdentities).where(and(eq(emailIdentities.id, input.senderIdentityId), eq(emailIdentities.ownerId, ctx.user.id))).limit(1))[0];
+      const approval = (await db.select().from(approvals).where(and(eq(approvals.ownerId, ctx.user.id), eq(approvals.resourceType, "message"), eq(approvals.resourceId, input.messageId), eq(approvals.actionType, "email_send"), eq(approvals.status, "approved"))).limit(1))[0];
+      if (!message || !identity || !approval) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A current approved sender and approved email action are required." });
+      const blocked = (await db.select().from(suppressionList).where(and(eq(suppressionList.ownerId, ctx.user.id), eq(suppressionList.channel, "email"), eq(suppressionList.valueHash, hashContactValue(input.recipient)))).limit(1))[0];
+      if (blocked?.active) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Recipient was suppressed before delivery." });
+      try {
+        const result = await sendApprovedEmail({ from: `${identity.displayName} <${identity.email}>`, to: input.recipient, replyTo: identity.replyTo, subject: message.subject ?? "", text: message.body });
+        await db.update(messages).set({ status: "sent", providerMessageId: result.providerMessageId, sentAt: new Date() }).where(eq(messages.id, message.id));
+        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "smtp", action: "email.sent", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "sent", metadata: { approvalId: approval.id } });
+        return { success: true, providerMessageId: result.providerMessageId };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message.slice(0, 1000) : "SMTP delivery failed";
+        await db.update(messages).set({ status: "retryable_failed" }).where(eq(messages.id, message.id));
+        const incidentId = createId("inc_");
+        await db.insert(incidents).values({ id: incidentId, ownerId: ctx.user.id, incidentType: "smtp_delivery_failure", severity: "high", status: "detected", affectedResourceType: "message", affectedResourceId: message.id, summary: reason });
+        await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "smtp", action: "email.delivery_failed", resourceType: "message", resourceId: message.id, previousState: message.status, nextState: "retryable_failed", metadata: { incidentId } });
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Delivery failed safely and was added to the exception center." });
+      }
+    }),
+  }),
+  inbound: router({
+    record: protectedProcedure.input(z.object({ conversationId: z.string().min(4), sender: z.string().email(), subject: z.string().max(255).optional(), body: z.string().trim().min(1).max(12000), providerMessageId: z.string().max(255).optional() })).mutation(async ({ ctx, input }) => {
+      const db = await requireDb(); const conversation = (await db.select().from(conversations).where(and(eq(conversations.id, input.conversationId), eq(conversations.ownerId, ctx.user.id))).limit(1))[0];
+      if (!conversation) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation was not found." });
+      const id = createId("msg_"); const optedOut = detectOptOut(input.body);
+      await db.insert(messages).values({ id, conversationId: conversation.id, ownerId: ctx.user.id, direction: "inbound", status: "received", subject: input.subject, body: input.body, providerMessageId: input.providerMessageId, idempotencyKey: `inbound:${input.providerMessageId ?? id}`, aiGenerated: false, deliveredAt: new Date() });
+      if (optedOut) await db.insert(suppressionList).values({ id: createId("sup_"), ownerId: ctx.user.id, channel: "email", valueHash: hashContactValue(input.sender), reason: "Inbound opt-out detected", source: "inbound_mail" }).onDuplicateKeyUpdate({ set: { active: true, reason: "Inbound opt-out detected", source: "inbound_mail" } });
+      await db.update(conversations).set({ status: optedOut ? "opted_out" : "reply_received", classification: optedOut ? "stop_contact" : null, lastMessageAt: new Date() }).where(eq(conversations.id, conversation.id));
+      await recordAudit({ ownerId: ctx.user.id, actorType: "provider", actorId: "inbound_mail", action: optedOut ? "email.opt_out_detected" : "email.inbound_recorded", resourceType: "conversation", resourceId: conversation.id, nextState: optedOut ? "opted_out" : "reply_received", metadata: { messageId: id } });
+      return { messageId: id, optedOut };
+    }),
+    conversations: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).default({ limit: 50 })).query(async ({ ctx, input }) => (await requireDb()).select().from(conversations).where(eq(conversations.ownerId, ctx.user.id)).orderBy(desc(conversations.updatedAt)).limit(input.limit)),
+  }),
+});

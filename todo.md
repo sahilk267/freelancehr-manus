@@ -42,3 +42,15 @@
 - [x] Add screening detail and owner-decision UI, plus full shortlist update/state controls.
 - [x] Expose rights-request correction and deletion fulfillment actions in the exception center.
 - [x] Add candidate filter controls for profile state, source, availability, and do-not-contact/withdrawn records, with typed backend filtering.
+- [x] Add configurable domain sender identities for owner, clients, talent, interviews, finance, and privacy mailboxes.
+- [x] Implement a server-side SMTP transport contract, encrypted credential use, connection health check, and no-secret logging rules.
+- [x] Implement approval-gated message sending, message lifecycle transitions, delivery-failure handling, recipient suppression checks, and audit records.
+- [ ] Add inbound-email intake contract with mailbox polling/webhook adapter, thread matching, reply classification queueing, opt-out detection, and exception routing.
+- [ ] Build email identity, sender-health, outbound approval, and conversation-history views in the owner workspace.
+- [ ] Add unit tests for sender allowlists, suppression enforcement, approval-before-send, inbound thread correlation, and opt-out handling.
+- [x] Write the Hostinger email credential, SPF, DKIM, DMARC, forwarding, and mail-reception configuration handoff for freelancehr.overseasjob.in.
+- [ ] Read the email integration TODO items, verify completed work, save a checkpoint, and deliver the next-phase summary.
+- [ ] Validate the live SMTP connection, sender identities, and mail-reception access after the user supplies Hostinger credentials.
+- [x] Add an auditable SMTP transport verification procedure that persists sender health status.
+- [x] Add outbound SMTP failure routing with message status updates, exception creation, and audit events.
+- [ ] Add unit coverage for mail-transport verification and SMTP failure transitions.
