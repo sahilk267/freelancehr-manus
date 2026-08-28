@@ -97,7 +97,7 @@
 ## Repository Delivery
 
 - [x] Create the requested Git commit.
-- [ ] Push the commit to the configured remote, verify the remote branch, and report any remaining local changes.
+- [x] Push the commit to the configured remote, verify the remote branch, and report any remaining local changes.
 
 ## New Remote Repository Delivery
 
