@@ -93,3 +93,8 @@
 - [ ] Save a Hostinger-readiness checkpoint after the completed OIDC session invalidation validation.
 - [x] Clear the production OIDC session cookie on logout and add specific OIDC logout coverage.
 - [ ] Configure the chosen OIDC provider and private S3-compatible storage credentials in Hostinger hPanel, then run deployed-domain login and signed-document tests.
+
+## Repository Delivery
+
+- [ ] Create and push the requested Git commit.
+- [ ] Verify the pushed commit and report the remote branch and remaining local changes.
