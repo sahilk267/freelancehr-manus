@@ -119,3 +119,9 @@
 
 - [ ] Configure OIDC/private storage in Hostinger and run deployed-domain tests.
 - [ ] Supply and validate Hostinger Mail API credentials and webhook events.
+
+## Hostinger Local Storage Mode
+
+- [x] Make private local filesystem storage configurable for Hostinger as the current primary document store.
+- [x] Preserve S3-compatible storage as an explicit optional backup mode, not a required startup dependency in local mode.
+- [x] Add local-storage path safety, upload/retrieval tests, and update the Hostinger handoff documentation.

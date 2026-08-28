@@ -10,7 +10,7 @@ The managed development template includes platform-specific authentication and s
 | --- | --- | --- |
 | Authentication | OIDC provider, such as Google Workspace/Auth0/Clerk, with server-side session cookies | Do not deploy platform-specific preview OAuth credentials to Hostinger |
 | Database | Hostinger MySQL or a managed MySQL-compatible database with TLS | Do not expose database credentials in the React application |
-| Candidate documents | Private S3-compatible bucket with signed GET/PUT endpoints and malware scanning | Do not retain CVs in public web directories or database BLOBs |
+| Candidate documents | Private Hostinger filesystem path outside the public web root; S3-compatible storage remains an optional backup mode | Do not retain CVs in public web directories or database BLOBs, and do not expose the local storage directory through static hosting |
 | AI | `OPENROUTER_API_KEY` held only in Node environment variables | Do not use `VITE_OPENROUTER_API_KEY` or call OpenRouter directly from browser code |
 | Email | Hostinger Mail API bearer token, restricted mailbox resource IDs, webhook secret, and verified SPF/DKIM/DMARC | Do not enable mass outreach or invite delivery until API verification and controlled delivery tests pass |
 | Calendar | Provider-free ICS export with UTC persistence, reschedule sequence, cancellation status, and controlled reminders | No Google/Microsoft credentials are required for the current release; external sync remains a future adapter |
@@ -39,9 +39,9 @@ The production server intentionally **refuses to start** unless its OIDC and pri
 | --- | --- | --- |
 | OIDC login | `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_BASE_URL`, `SESSION_SECRET`, and either `PRIMARY_OWNER_OPEN_ID` or `PRIMARY_OWNER_EMAIL` | Startup is blocked without exposing the missing secret value. |
 | OIDC callback | `OIDC_REDIRECT_URI=https://freelancehr.overseasjob.in/api/auth/oidc/callback` registered exactly with the provider | Sign-in is rejected if state, nonce, PKCE, issuer, audience, or signature validation fails. |
-| Private documents | `PRIVATE_STORAGE_MODE=s3`, `STORAGE_BUCKET`, `STORAGE_REGION`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, plus optional `STORAGE_ENDPOINT`/`STORAGE_FORCE_PATH_STYLE` for an S3-compatible vendor | Startup is blocked; candidate documents are never written to public web files. |
+| Private documents | `PRIVATE_STORAGE_MODE=local` and optional `PRIVATE_LOCAL_STORAGE_PATH` outside the public web root; use `PRIVATE_STORAGE_MODE=s3` plus S3 credentials only when backup/provider storage is activated | Local mode keeps documents behind the authenticated `/api/private-storage/*` route. Explicit S3 mode remains fail-closed until its credentials are configured. |
 
-The document table stores a non-public `private://s3/...` reference in production. Access is granted through an owner-authorized, short-lived signed URL, with a corresponding audit event. Team roles cannot access the signed-document procedure.
+In local mode, the document table stores a non-public `local/...` reference outside the public web root. Access is granted through the authenticated owner-authorized `/api/private-storage/*` route, with a corresponding audit event. When S3 backup mode is activated, records instead use `private://s3/...` and short-lived signed URLs. Team roles cannot access the signed-document procedure.
 
 ## Environment inventory
 
@@ -61,6 +61,8 @@ STORAGE_BUCKET=<private-bucket-name>
 STORAGE_REGION=<region>
 STORAGE_ACCESS_KEY_ID=<server-side-only>
 STORAGE_SECRET_ACCESS_KEY=<server-side-only>
+PRIVATE_STORAGE_MODE=local
+PRIVATE_LOCAL_STORAGE_PATH=<absolute-path-outside-public-web-root>
 HOSTINGER_MAIL_API_TOKEN=<server-side-only>
 HOSTINGER_MAIL_FROM_DOMAIN=overseasjob.in
 HOSTINGER_MAILBOX_OWNER_ID=<Hostinger mailbox resource ID>

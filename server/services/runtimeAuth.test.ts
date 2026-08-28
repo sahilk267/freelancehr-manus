@@ -14,7 +14,7 @@ describe("portable production authentication guard", () => {
   afterEach(() => { process.env = { ...originalEnv }; });
 
   it("fails closed when production OIDC and private storage configuration is absent", () => {
-    expect(getProductionRuntimeStatus()).toMatchObject({ configured: false, oidcConfigured: false, privateStorage: { mode: "s3", configured: false } });
+    expect(getProductionRuntimeStatus()).toMatchObject({ configured: false, oidcConfigured: false, privateStorage: { mode: "local", configured: true } });
     expect(() => assertProductionRuntimeConfiguration()).toThrow("production startup blocked");
   });
 
@@ -38,7 +38,7 @@ describe("portable production authentication guard", () => {
       STORAGE_ACCESS_KEY_ID: "test-key",
       STORAGE_SECRET_ACCESS_KEY: "test-secret",
     });
-    expect(getProductionRuntimeStatus()).toMatchObject({ configured: true, oidcConfigured: true, privateStorage: { mode: "s3", configured: true } });
+    expect(getProductionRuntimeStatus()).toMatchObject({ configured: true, oidcConfigured: true, privateStorage: { mode: "local", configured: true } });
     expect(() => assertProductionRuntimeConfiguration()).not.toThrow();
   });
 });

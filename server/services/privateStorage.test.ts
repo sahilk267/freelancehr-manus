@@ -5,7 +5,7 @@ const storageGetSignedUrl = vi.fn(async (key: string) => `https://signed.example
 
 vi.mock("../storage", () => ({ storagePut, storageGetSignedUrl }));
 
-const { getPrivateDocumentUrl, getPrivateStorageStatus, putPrivateDocument } = await import("./privateStorage");
+const { getPrivateDocumentUrl, getPrivateStorageStatus, putPrivateDocument, readPrivateDocument } = await import("./privateStorage");
 const originalEnv = { ...process.env };
 
 describe("private document storage adapter", () => {
@@ -29,13 +29,24 @@ describe("private document storage adapter", () => {
     expect(storagePut).toHaveBeenCalledWith("private/17/cv.pdf", expect.any(Buffer), "application/pdf");
   });
 
-  it("fails closed in production status checks when S3-compatible private storage is incomplete", () => {
+  it("writes and reads private files in explicit local mode", async () => {
     process.env.NODE_ENV = "production";
+    process.env.PRIVATE_STORAGE_MODE = "local";
+    process.env.PRIVATE_LOCAL_STORAGE_PATH = `/tmp/freelancehr-storage-test-${process.pid}`;
+    await expect(putPrivateDocument("private/17/local.txt", Buffer.from("private-data"), "text/plain")).resolves.toEqual({ key: "local/private/17/local.txt", url: "/api/private-storage/private%2F17%2Flocal.txt" });
+    await expect(readPrivateDocument("local/private/17/local.txt")).resolves.toEqual(Buffer.from("private-data"));
+    await expect(getPrivateDocumentUrl("local/private/17/local.txt")).resolves.toBe("/api/private-storage/private%2F17%2Flocal.txt");
+  });
+
+  it("fails closed in explicit S3 mode when S3-compatible private storage is incomplete", () => {
+    process.env.NODE_ENV = "production";
+    process.env.PRIVATE_STORAGE_MODE = "s3";
     expect(getPrivateStorageStatus()).toEqual(expect.objectContaining({ mode: "s3", configured: false, missing: expect.arrayContaining(["bucket", "region", "accessKeyId", "secretAccessKey"]) }));
   });
 
   it("does not treat a private S3 record as a public URL", () => {
     process.env.NODE_ENV = "production";
+    process.env.PRIVATE_STORAGE_MODE = "s3";
     process.env.STORAGE_BUCKET = "private-freelancehr";
     process.env.STORAGE_REGION = "ap-south-1";
     process.env.STORAGE_ACCESS_KEY_ID = "test-key";

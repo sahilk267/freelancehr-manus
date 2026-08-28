@@ -1,18 +1,34 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { storageGetSignedUrl, storagePut } from "../storage";
 
-type PrivateStorageMode = "managed" | "s3";
+type PrivateStorageMode = "managed" | "local" | "s3";
 
 function getMode(): PrivateStorageMode {
   const configured = process.env.PRIVATE_STORAGE_MODE?.trim().toLowerCase();
   if (configured === "s3") return "s3";
+  if (configured === "local") return "local";
   if (configured === "managed") return "managed";
-  return process.env.NODE_ENV === "production" ? "s3" : "managed";
+  return process.env.NODE_ENV === "production" ? "local" : "managed";
 }
 
 function normalizeKey(value: string) {
-  return value.replace(/^\/+/, "");
+  const key = value.replace(/^\/+/, "").replace(/^local\//, "");
+  if (!key || key.includes("\\0") || key.split("/").some(part => part === "..")) throw new Error("Invalid private storage key.");
+  return key;
+}
+
+function localRoot() {
+  return path.resolve(process.env.PRIVATE_LOCAL_STORAGE_PATH?.trim() || path.join(process.cwd(), "private-storage"));
+}
+
+function localFile(key: string) {
+  const root = localRoot();
+  const target = path.resolve(root, key);
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error("Invalid private storage key.");
+  return target;
 }
 
 function requiredS3Config() {
@@ -43,13 +59,19 @@ function getS3Client() {
 export function getPrivateStorageStatus() {
   const mode = getMode();
   const { missing } = requiredS3Config();
-  return { mode, configured: mode === "managed" || missing.length === 0, missing: mode === "s3" ? missing : [] };
+  return { mode, configured: mode !== "s3" || missing.length === 0, missing: mode === "s3" ? missing : [] };
 }
 
 export async function putPrivateDocument(relKey: string, data: Buffer | Uint8Array | string, contentType: string) {
   const mode = getMode();
-  if (mode === "managed") return storagePut(relKey, data, contentType);
   const key = normalizeKey(relKey);
+  if (mode === "local") {
+    const target = localFile(key);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, data);
+    return { key: `local/${key}`, url: `/api/private-storage/${encodeURIComponent(key)}` };
+  }
+  if (mode === "managed") return storagePut(relKey, data, contentType);
   const { bucket, client } = getS3Client();
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, ContentType: contentType, ServerSideEncryption: "AES256" }));
   return { key, url: `private://s3/${key}` };
@@ -58,7 +80,14 @@ export async function putPrivateDocument(relKey: string, data: Buffer | Uint8Arr
 export async function getPrivateDocumentUrl(relKey: string, expiresInSeconds = 300) {
   const key = normalizeKey(relKey);
   const boundedExpiry = Math.max(60, Math.min(expiresInSeconds, 900));
+  if (getMode() === "local") return `/api/private-storage/${encodeURIComponent(key)}`;
   if (getMode() === "managed") return storageGetSignedUrl(key);
   const { bucket, client } = getS3Client();
   return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: boundedExpiry });
+}
+
+export async function readPrivateDocument(relKey: string) {
+  const key = normalizeKey(relKey);
+  if (getMode() !== "local") throw new Error("Direct local document reads are only available in local storage mode.");
+  return readFile(localFile(key));
 }
