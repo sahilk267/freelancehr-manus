@@ -55,7 +55,7 @@
 - [x] Add an owner-scoped email message-history query test.
 - [x] Add a controlled-delivery test proving outbound send fails without an approved email action.
 - [x] Write the Hostinger email credential, SPF, DKIM, DMARC, forwarding, and mail-reception configuration handoff for freelancehr.overseasjob.in.
-- [ ] Read the email integration TODO items, verify completed work, save a checkpoint, and deliver the next-phase summary.
+- [x] Read the email integration TODO items, verify completed work, save a checkpoint, and deliver the next-phase summary.
 - [x] Validate the live SMTP connection, sender identities, and mail-reception access after the user supplies Hostinger credentials. Superseded by the Hostinger Mail API activation task.
 - [x] Add an auditable SMTP transport verification procedure that persists sender health status. Superseded by Hostinger Mail API token verification.
 - [x] Add outbound SMTP failure routing with message status updates, exception creation, and audit events. Superseded by Hostinger Mail API delivery-failure routing.
@@ -90,7 +90,7 @@
 - [x] Complete portable session/authentication interfaces that preserve development login and correctly invalidate future OIDC sessions on logout.
 - [x] Add test coverage for production configuration guards and private document access rules.
 - [x] Update the Hostinger deployment handoff with concrete OIDC, session, S3-compatible storage, and migration activation steps.
-- [ ] Save a Hostinger-readiness checkpoint after the completed OIDC session invalidation validation.
+- [x] Save a Hostinger-readiness checkpoint after the completed OIDC session invalidation validation.
 - [x] Clear the production OIDC session cookie on logout and add specific OIDC logout coverage.
 - [ ] Configure the chosen OIDC provider and private S3-compatible storage credentials in Hostinger hPanel, then run deployed-domain login and signed-document tests.
 
@@ -106,3 +106,16 @@
 - [x] Update the local origin remote and push the `main` branch without exposing credentials.
 - [x] Verify the remote repository URL, pushed revision, and clean worktree.
 - [x] Report the new repository path and push status.
+
+## Remaining Implementation
+
+- [x] Implement provider-free interview calendar events and deterministic ICS export.
+- [x] Integrate calendar export, reminders, reschedule, cancellation, and audit controls.
+- [x] Verify the live built-in model catalog and configure the safest free-model routing with OpenRouter fallback.
+- [x] Add tests and documentation for calendar and free-model safeguards.
+- [x] Run full validation and save the remaining-implementation checkpoint.
+
+## External Configuration Prerequisites
+
+- [ ] Configure OIDC/private storage in Hostinger and run deployed-domain tests.
+- [ ] Supply and validate Hostinger Mail API credentials and webhook events.

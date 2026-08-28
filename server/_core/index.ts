@@ -9,6 +9,11 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { processHostingerMailWebhook } from "../services/hostingerWebhook";
+import { processDueInterviewReminders } from "../services/interviewReminders";
+import { sdk } from "./sdk";
+import { eq } from "drizzle-orm";
+import { workspaceSettings } from "../../drizzle/schema";
+import { requireDb } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -41,6 +46,20 @@ async function startServer() {
   app.post("/api/webhooks/hostinger-mail", async (req, res) => {
     const result = await processHostingerMailWebhook({ authorization: req.headers.authorization, body: req.body });
     res.status(result.statusCode).json(result.body);
+  });
+  app.post("/api/scheduled/interview-reminders", async (req, res) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+      const db = await requireDb();
+      const workspace = (await db.select().from(workspaceSettings).where(eq(workspaceSettings.scheduleCronTaskUid, user.taskUid)).limit(1))[0];
+      if (!workspace) return res.json({ ok: true, skipped: "orphan" });
+      const result = await processDueInterviewReminders(workspace.ownerId, 10);
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown scheduled reminder error.";
+      return res.status(500).json({ error: message, timestamp: new Date().toISOString() });
+    }
   });
   // tRPC API
   app.use(

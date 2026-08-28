@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { aiModelRoutes, aiUsage, automationQueue, workspaceSettings } from "../../drizzle/schema";
 import { createId, recordAudit, requireDb } from "../db";
-import { OpenRouterConfigurationError, OpenRouterTransientError, OpenRouterValidationError, runOpenRouterTask, type AiTaskType } from "./openrouter";
+import { OpenRouterConfigurationError, OpenRouterTransientError, OpenRouterValidationError, type AiTaskType } from "./openrouter";
+import { runControlledAiTask } from "./aiRouting";
 
 const AI_JOB_TYPES = new Set<AiTaskType>(["classify_reply", "draft_outreach", "parse_cv", "score_match", "send_reminder", "reconcile_invoice"]);
 const calculateBackoff = (attempts: number) => Math.min(60 * 60 * 1000, 30_000 * 2 ** Math.max(0, attempts - 1));
@@ -28,14 +29,14 @@ export async function processOneQueuedJob(ownerId: number) {
   const route = (await db.select().from(aiModelRoutes).where(and(eq(aiModelRoutes.ownerId, ownerId), eq(aiModelRoutes.taskType, job.jobType), eq(aiModelRoutes.isActive, true))).limit(1))[0];
   const usageId = createId("aiu_");
   try {
-    const response = await runOpenRouterTask({
+    const response = await runControlledAiTask({
       taskType: job.jobType as AiTaskType,
       input: (job.payload ?? {}) as Record<string, unknown>,
-      primaryModel: route?.primaryModel ?? "openrouter/free",
+      primaryModel: route?.primaryModel ?? process.env.FREELANCEHR_BUILT_IN_MODEL ?? "manus-1.6-lite",
       fallbackModels: (route?.fallbackModels as string[] | null) ?? [],
       maxOutputTokens: route?.maxOutputTokens ?? 1200,
     });
-    await db.insert(aiUsage).values({ id: usageId, ownerId, routeId: route?.id ?? null, queueJobId: job.id, taskType: job.jobType, requestedModel: route?.primaryModel ?? "openrouter/free", selectedModel: response.selectedModel, status: "succeeded", latencyMs: response.latencyMs });
+    await db.insert(aiUsage).values({ id: usageId, ownerId, routeId: route?.id ?? null, queueJobId: job.id, taskType: job.jobType, requestedModel: route?.primaryModel ?? process.env.FREELANCEHR_BUILT_IN_MODEL ?? "manus-1.6-lite", selectedModel: response.selectedModel, status: "succeeded", latencyMs: response.latencyMs });
     await db.update(automationQueue).set({ status: "completed", result: response.result, completedAt: new Date(), lockToken: null, lockedAt: null, lastError: null }).where(and(eq(automationQueue.id, job.id), eq(automationQueue.lockToken, lockToken)));
     await recordAudit({ ownerId, actorType: "ai", actorId: response.selectedModel, action: "automation.completed", resourceType: "automation_job", resourceId: job.id, previousState: "running", nextState: "completed", metadata: { taskType: job.jobType, latencyMs: response.latencyMs } });
     return { status: "completed" as const, jobId: job.id, selectedModel: response.selectedModel };
@@ -45,7 +46,7 @@ export async function processOneQueuedJob(ownerId: number) {
     const nextStatus = isConfig ? "blocked" : isRetryable && job.attempts + 1 < job.maxAttempts ? "retryable_failed" : "permanently_failed";
     const nextRun = isRetryable ? new Date(Date.now() + calculateBackoff(job.attempts + 1)) : now;
     const message = error instanceof Error ? error.message : "Unknown automation error.";
-    await db.insert(aiUsage).values({ id: usageId, ownerId, routeId: route?.id ?? null, queueJobId: job.id, taskType: job.jobType, requestedModel: route?.primaryModel ?? "openrouter/free", status: nextStatus, errorCode: error instanceof OpenRouterValidationError ? "invalid_output" : isConfig ? "configuration" : "provider" });
+    await db.insert(aiUsage).values({ id: usageId, ownerId, routeId: route?.id ?? null, queueJobId: job.id, taskType: job.jobType, requestedModel: route?.primaryModel ?? process.env.FREELANCEHR_BUILT_IN_MODEL ?? "manus-1.6-lite", status: nextStatus, errorCode: error instanceof OpenRouterValidationError ? "invalid_output" : isConfig ? "configuration" : "provider" });
     await db.update(automationQueue).set({ status: nextStatus, scheduledAt: nextRun, lastError: message.slice(0, 4000), lockToken: null, lockedAt: null }).where(and(eq(automationQueue.id, job.id), eq(automationQueue.lockToken, lockToken)));
     await recordAudit({ ownerId, actorType: "system", action: "automation.failed", resourceType: "automation_job", resourceId: job.id, previousState: "running", nextState: nextStatus, metadata: { taskType: job.jobType, error: message } });
     return { status: nextStatus as "blocked" | "retryable_failed" | "permanently_failed", jobId: job.id };

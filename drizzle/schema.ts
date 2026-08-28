@@ -41,10 +41,11 @@ export const workspaceSettings = mysqlTable(
     quietHoursStart: varchar("quietHoursStart", { length: 5 }).notNull().default("20:00"),
     quietHoursEnd: varchar("quietHoursEnd", { length: 5 }).notNull().default("08:00"),
     policyConfig: json("policyConfig"),
+    scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
     createdAt,
     updatedAt,
   },
-  table => [uniqueIndex("workspace_owner_unique").on(table.ownerId)],
+  table => [uniqueIndex("workspace_owner_unique").on(table.ownerId), index("workspace_schedule_cron_idx").on(table.scheduleCronTaskUid)],
 );
 
 export const policyVersions = mysqlTable(
@@ -360,9 +361,12 @@ export const interviews = mysqlTable(
     durationMinutes: int("durationMinutes").notNull().default(45),
     timezone: varchar("timezone", { length: 64 }).notNull().default("Asia/Kolkata"),
     meetingUrl: text("meetingUrl"),
-    calendarProvider: varchar("calendarProvider", { length: 64 }),
+    calendarProvider: varchar("calendarProvider", { length: 64 }).notNull().default("ics"),
     calendarEventId: varchar("calendarEventId", { length: 255 }),
+    calendarSequence: int("calendarSequence").notNull().default(0),
+    calendarStatus: mysqlEnum("calendarStatus", ["tentative", "confirmed", "cancelled"]).notNull().default("tentative"),
     rescheduleCount: int("rescheduleCount").notNull().default(0),
+    reminderAt: timestamp("reminderAt"),
     reminderSentAt: timestamp("reminderSentAt"),
     completedAt: timestamp("completedAt"),
     createdAt,

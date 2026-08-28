@@ -2,6 +2,8 @@ import { createHash } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, like, or } from "drizzle-orm";
 import { z } from "zod";
+import { parse as parseCookieHeader } from "cookie";
+import { COOKIE_NAME } from "@shared/const";
 import {
   approvals,
   automationQueue,
@@ -21,11 +23,14 @@ import {
   screenings,
   shortlists,
   suppressionList,
+  workspaceSettings,
 } from "../../drizzle/schema";
 import { createId, ensureWorkspace, hashContactValue, recordAudit, requireDb } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { createHeartbeatJob } from "../_core/heartbeat";
 import { extractDocumentText } from "../services/documentText";
 import { getPrivateDocumentUrl, putPrivateDocument } from "../services/privateStorage";
+import { createInterviewEventUid, createInterviewIcs } from "../services/calendar";
 import { assertTransition, isConsequentialAction } from "../workflow";
 import { consequentialRouter } from "./consequential";
 import { candidateWorkflowsRouter } from "./candidateWorkflows";
@@ -340,19 +345,60 @@ export const interviewsRouter = router({
     const db = await requireDb();
     return db.select().from(interviews).where(eq(interviews.ownerId, ctx.user.id)).orderBy(desc(interviews.scheduledAt)).limit(input.limit);
   }),
+  enableReminderSchedule: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.actor && ctx.actor.id !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Only the workspace owner can manage reminder schedules." });
+    const db = await requireDb();
+    const cookie = parseCookieHeader(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+    if (!cookie) throw new TRPCError({ code: "UNAUTHORIZED", message: "A session cookie is required to create a schedule." });
+    const job = await createHeartbeatJob({ name: `interview-reminders-${ctx.user.id}`, cron: "0 */5 * * * *", path: "/api/scheduled/interview-reminders", description: "Queue due interview reminder drafts every five minutes." }, cookie);
+    await db.update(workspaceSettings).set({ scheduleCronTaskUid: job.taskUid }).where(eq(workspaceSettings.ownerId, ctx.user.id));
+    await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.reminder_schedule_enabled", resourceType: "workspace", resourceId: String(ctx.user.id), metadata: { taskUid: job.taskUid, cron: "0 */5 * * * *" } });
+    return job;
+  }),
   create: protectedProcedure.input(z.object({ companyId: z.string().min(4), candidateId: z.string().min(4), jobId: z.string().min(4), scheduledAt: z.date(), timezone: z.string().trim().min(2).max(64).default("Asia/Kolkata"), durationMinutes: z.number().int().min(15).max(240).default(45), meetingUrl: z.string().url().optional() })).mutation(async ({ ctx, input }) => {
     const db = await requireDb();
     const id = createId("int_");
-    await db.insert(interviews).values({ id, ownerId: ctx.user.id, companyId: input.companyId, candidateId: input.candidateId, jobId: input.jobId, status: "scheduled", scheduledAt: input.scheduledAt, timezone: input.timezone, durationMinutes: input.durationMinutes, meetingUrl: input.meetingUrl ?? null });
+    await db.insert(interviews).values({ id, ownerId: ctx.user.id, companyId: input.companyId, candidateId: input.candidateId, jobId: input.jobId, status: "scheduled", scheduledAt: input.scheduledAt, timezone: input.timezone, durationMinutes: input.durationMinutes, meetingUrl: input.meetingUrl ?? null, calendarProvider: "ics", calendarEventId: createInterviewEventUid(id), calendarStatus: "tentative", calendarSequence: 0, reminderAt: new Date(input.scheduledAt.getTime() - 24 * 60 * 60 * 1000) });
     await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.scheduled", resourceType: "interview", resourceId: id, nextState: "scheduled" });
     return { id };
+  }),
+  exportIcs: protectedProcedure.input(idInput).query(async ({ ctx, input }) => {
+    const db = await requireDb();
+    const interview = await requireOwned((await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1))[0], ctx.user.id, "Interview");
+    if (!interview.scheduledAt) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Interview has no scheduled time." });
+    const content = createInterviewIcs({ uid: interview.calendarEventId ?? createInterviewEventUid(interview.id), sequence: interview.calendarSequence, start: interview.scheduledAt, end: new Date(interview.scheduledAt.getTime() + interview.durationMinutes * 60_000), summary: `FreelanceHR interview ${interview.id.slice(-6)}`, description: `Interview status: ${interview.status}. Timezone: ${interview.timezone}.`, location: interview.meetingUrl, status: interview.calendarStatus === "cancelled" ? "CANCELLED" : interview.calendarStatus === "confirmed" ? "CONFIRMED" : "TENTATIVE" });
+    return { content, filename: `freelancehr-interview-${interview.id}.ics`, calendarStatus: interview.calendarStatus, sequence: interview.calendarSequence };
+  }),
+  setReminder: protectedProcedure.input(z.object({ id: z.string().min(4), reminderAt: z.date().nullable() })).mutation(async ({ ctx, input }) => {
+    const db = await requireDb();
+    const interview = await requireOwned((await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1))[0], ctx.user.id, "Interview");
+    if (interview.calendarStatus === "cancelled") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cancelled interviews cannot receive reminders." });
+    await db.update(interviews).set({ reminderAt: input.reminderAt, reminderSentAt: null }).where(eq(interviews.id, interview.id));
+    await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.reminder_configured", resourceType: "interview", resourceId: interview.id, metadata: { reminderAt: input.reminderAt?.toISOString() ?? null } });
+    return { success: true };
+  }),
+  reschedule: protectedProcedure.input(z.object({ id: z.string().min(4), scheduledAt: z.date(), timezone: z.string().trim().min(2).max(64), durationMinutes: z.number().int().min(15).max(240), meetingUrl: z.string().url().nullable().optional() })).mutation(async ({ ctx, input }) => {
+    const db = await requireDb();
+    const interview = await requireOwned((await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1))[0], ctx.user.id, "Interview");
+    assertTransition("interview", interview.status, "reschedule_requested");
+    await db.update(interviews).set({ status: "scheduled", scheduledAt: input.scheduledAt, timezone: input.timezone, durationMinutes: input.durationMinutes, meetingUrl: input.meetingUrl ?? null, calendarSequence: interview.calendarSequence + 1, calendarStatus: "tentative", rescheduleCount: interview.rescheduleCount + 1, reminderAt: new Date(input.scheduledAt.getTime() - 24 * 60 * 60 * 1000), reminderSentAt: null }).where(eq(interviews.id, interview.id));
+    await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.rescheduled", resourceType: "interview", resourceId: interview.id, previousState: interview.status, nextState: "scheduled", metadata: { calendarSequence: interview.calendarSequence + 1 } });
+    return { success: true };
+  }),
+  cancel: protectedProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    const db = await requireDb();
+    const interview = await requireOwned((await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1))[0], ctx.user.id, "Interview");
+    assertTransition("interview", interview.status, "cancelled");
+    await db.update(interviews).set({ status: "cancelled", calendarStatus: "cancelled", calendarSequence: interview.calendarSequence + 1, reminderAt: null }).where(eq(interviews.id, interview.id));
+    await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.cancelled", resourceType: "interview", resourceId: interview.id, previousState: interview.status, nextState: "cancelled", metadata: { calendarSequence: interview.calendarSequence + 1 } });
+    return { success: true };
   }),
   transition: protectedProcedure.input(z.object({ id: z.string().min(4), state: z.string().min(2).max(48) })).mutation(async ({ ctx, input }) => {
     const db = await requireDb();
     const rows = await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1);
     const interview = await requireOwned(rows[0], ctx.user.id, "Interview");
     assertTransition("interview", interview.status, input.state);
-    await db.update(interviews).set({ status: input.state, completedAt: input.state === "completed" ? new Date() : interview.completedAt }).where(eq(interviews.id, input.id));
+    await db.update(interviews).set({ status: input.state, completedAt: input.state === "completed" ? new Date() : interview.completedAt, calendarStatus: input.state === "confirmed" ? "confirmed" : input.state === "cancelled" ? "cancelled" : interview.calendarStatus }).where(eq(interviews.id, input.id));
     await recordAudit({ ownerId: ctx.user.id, actorType: "user", actorId: String(ctx.user.id), action: "interview.state_changed", resourceType: "interview", resourceId: input.id, previousState: interview.status, nextState: input.state });
     return { success: true };
   }),

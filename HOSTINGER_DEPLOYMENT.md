@@ -13,7 +13,7 @@ The managed development template includes platform-specific authentication and s
 | Candidate documents | Private S3-compatible bucket with signed GET/PUT endpoints and malware scanning | Do not retain CVs in public web directories or database BLOBs |
 | AI | `OPENROUTER_API_KEY` held only in Node environment variables | Do not use `VITE_OPENROUTER_API_KEY` or call OpenRouter directly from browser code |
 | Email | Hostinger Mail API bearer token, restricted mailbox resource IDs, webhook secret, and verified SPF/DKIM/DMARC | Do not enable mass outreach or invite delivery until API verification and controlled delivery tests pass |
-| Calendar | Google/Microsoft Calendar OAuth integration | Do not mark calendar events sent until provider confirmation is recorded |
+| Calendar | Provider-free ICS export with UTC persistence, reschedule sequence, cancellation status, and controlled reminders | No Google/Microsoft credentials are required for the current release; external sync remains a future adapter |
 | Payments | Payment/bank reconciliation provider or controlled manual ledger | Do not issue credit, write-off, or mark paid automatically |
 
 ## Deployment pipeline
@@ -91,10 +91,12 @@ The queue processor must never use `setInterval`, `node-cron`, or a long-running
 
 During the first pilot, schedule only one low-risk task class, such as reply classification or CV extraction, and keep all outbound messages in draft. Do not schedule automated sending, client sharing, hiring outcomes, or invoice changes.
 
+Interview reminders use the bounded Heartbeat callback `/api/scheduled/interview-reminders` at `0 */5 * * * *` UTC. The callback authenticates the platform task UID, resolves the owner through `workspaceSettings.scheduleCronTaskUid`, claims due confirmed interviews idempotently, and queues a `send_reminder` draft. It never sends an external email by itself; owner approval and the Hostinger Mail API activation remain required.
+
 ## Domain and HTTPS
 
 In Hostinger hPanel, add `freelancehr.overseasjob.in` as a subdomain or Node application domain. Create the CNAME/A record required by the selected Hostinger app configuration and issue SSL after DNS propagation. Redirect HTTP to HTTPS, enable `Secure`, `HttpOnly`, and `SameSite` cookie attributes, and set the production CORS allowlist to only `https://freelancehr.overseasjob.in`.
 
 ## Pre-launch go/no-go
 
-The system must not go live until the team has confirmed: the owner sign-in flow; production shared-workspace authorization for invited members; database backups and restoration test; private document access test; consent withdrawal and suppression test; OpenRouter quota/fallback failure test; owner approval test; Hostinger Mail API verification, controlled test delivery, webhook payload validation, and email opt-out handling; TLS verification; no secrets in frontend bundles; and the emergency-stop drill. A successful `pnpm check` and `pnpm test` are necessary but not sufficient for this production approval.
+The system must not go live until the team has confirmed: the owner sign-in flow; production shared-workspace authorization for invited members; database backups and restoration test; private document access test; consent withdrawal and suppression test; OpenRouter quota/fallback failure test; built-in model catalog verification and free-model fallback test; owner approval test; Hostinger Mail API verification, controlled test delivery, webhook payload validation, and email opt-out handling; TLS verification; no secrets in frontend bundles; and the emergency-stop drill. A successful `pnpm check` and `pnpm test` are necessary but not sufficient for this production approval.
