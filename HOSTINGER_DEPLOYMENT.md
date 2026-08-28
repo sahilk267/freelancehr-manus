@@ -45,7 +45,7 @@ In local mode, the document table stores a non-public `local/...` reference outs
 
 ## Environment inventory
 
-Never commit the values. Set these in the Hostinger application environment panel or equivalent secure secret manager.
+Never commit the values. Set these in the Hostinger application environment panel or equivalent secure secret manager. The `HOSTINGER_MAILBOX_*_ADDRESS` variables define the visible From identity, while the separate `HOSTINGER_MAILBOX_*_ID` variables must contain the resource identifiers accepted by the Hostinger Mail API. An email address may be valid for sender allowlisting but still be rejected as an API mailbox resource ID. If delivery returns a `mailboxResourceId` validation error, keep the matching `HOSTINGER_MAILBOX_*_ADDRESS` unchanged and replace only the matching `HOSTINGER_MAILBOX_*_ID` with the mailbox resource ID shown by Hostinger. Do not substitute the visible sender address into the resource-ID field.
 
 ```dotenv
 NODE_ENV=production
@@ -71,6 +71,12 @@ HOSTINGER_MAILBOX_TALENT_ID=<Hostinger mailbox resource ID>
 HOSTINGER_MAILBOX_INTERVIEWS_ID=<Hostinger mailbox resource ID>
 HOSTINGER_MAILBOX_FINANCE_ID=<Hostinger mailbox resource ID>
 HOSTINGER_MAILBOX_PRIVACY_ID=<Hostinger mailbox resource ID>
+HOSTINGER_MAILBOX_OWNER_ADDRESS=owner.fl@overseasjob.in
+HOSTINGER_MAILBOX_CLIENTS_ADDRESS=clients.fl@overseasjob.in
+HOSTINGER_MAILBOX_TALENT_ADDRESS=talent.fl@overseasjob.in
+HOSTINGER_MAILBOX_INTERVIEWS_ADDRESS=interviews.fl@overseasjob.in
+HOSTINGER_MAILBOX_FINANCE_ADDRESS=finance.fl@overseasjob.in
+HOSTINGER_MAILBOX_PRIVACY_ADDRESS=privacy.fl@overseasjob.in
 HOSTINGER_MAIL_WEBHOOK_SECRET=<one-time webhook bearer secret>
 ```
 

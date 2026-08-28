@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { chooseThreadReference, detectOptOut, getHostingerMailApiStatus, isApprovedSenderAddress, verifyHostingerMailApi } from "./hostingerMail";
+import { chooseThreadReference, detectOptOut, getHostingerMailApiStatus, getSenderAddress, isApprovedSenderAddress, verifyHostingerMailApi } from "./hostingerMail";
 
 describe("Hostinger Mail API safeguards", () => {
   const environment = { ...process.env };
@@ -8,6 +8,18 @@ describe("Hostinger Mail API safeguards", () => {
   it("allows only configured-domain sender identities", () => {
     expect(isApprovedSenderAddress("clients@overseasjob.in")).toBe(true);
     expect(isApprovedSenderAddress("clients@another-domain.test")).toBe(false);
+  });
+
+  it("uses explicit .fl sender addresses when configured", () => {
+    process.env.HOSTINGER_MAILBOX_OWNER_ADDRESS = "owner.fl@overseasjob.in";
+    process.env.HOSTINGER_MAILBOX_CLIENTS_ADDRESS = "clients.fl@overseasjob.in";
+    process.env.HOSTINGER_MAILBOX_TALENT_ADDRESS = "talent.fl@overseasjob.in";
+    process.env.HOSTINGER_MAILBOX_INTERVIEWS_ADDRESS = "interviews.fl@overseasjob.in";
+    process.env.HOSTINGER_MAILBOX_FINANCE_ADDRESS = "finance.fl@overseasjob.in";
+    process.env.HOSTINGER_MAILBOX_PRIVACY_ADDRESS = "privacy.fl@overseasjob.in";
+    expect(getSenderAddress("owner")).toBe("owner.fl@overseasjob.in");
+    expect(getSenderAddress("clients")).toBe("clients.fl@overseasjob.in");
+    expect(getHostingerMailApiStatus().configuredSenderAddressCount).toBe(6);
   });
 
   it("keeps the API integration disabled when no bearer token is configured", () => {

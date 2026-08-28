@@ -125,3 +125,20 @@
 - [x] Make private local filesystem storage configurable for Hostinger as the current primary document store.
 - [x] Preserve S3-compatible storage as an explicit optional backup mode, not a required startup dependency in local mode.
 - [x] Add local-storage path safety, upload/retrieval tests, and update the Hostinger handoff documentation.
+
+## Hostinger Mail Identity Update
+
+- [x] Update the six Hostinger mailbox sender addresses supplied by the owner.
+- [x] Request and securely store the Hostinger Mail API token without exposing it in chat or source control.
+- [x] Verify the mail adapter contract and document that live API calls require Hostinger mailbox resource IDs if the API rejects plain addresses.
+
+## Mail Sender Identity Separation
+
+- [x] Add explicit per-purpose Hostinger sender-address configuration for the six supplied .fl addresses.
+- [x] Separate sender email addresses from Hostinger mailbox resource IDs in outbound delivery and status reporting.
+- [x] Add tests and documentation for sender-address allowlists and resource-ID compatibility.
+
+## Hostinger Resource-ID Compatibility
+
+- [x] Add a focused delivery test proving sender address and mailbox resource ID are passed separately.
+- [x] Add a documented rejection/remediation test path for plain email values used where Hostinger requires mailbox resource IDs.

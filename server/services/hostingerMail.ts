@@ -4,11 +4,16 @@ export const EMAIL_PURPOSES = ["owner", "clients", "talent", "interviews", "fina
 export type EmailPurpose = (typeof EMAIL_PURPOSES)[number];
 
 const approvedDomain = (process.env.HOSTINGER_MAIL_FROM_DOMAIN || "overseasjob.in").trim().toLowerCase();
-const mailboxEnvKey: Record<EmailPurpose, string> = { owner: "HOSTINGER_MAILBOX_OWNER_ID", clients: "HOSTINGER_MAILBOX_CLIENTS_ID", talent: "HOSTINGER_MAILBOX_TALENT_ID", interviews: "HOSTINGER_MAILBOX_INTERVIEWS_ID", finance: "HOSTINGER_MAILBOX_FINANCE_ID", privacy: "HOSTINGER_MAILBOX_PRIVACY_ID" };
+const mailboxResourceEnvKey: Record<EmailPurpose, string> = { owner: "HOSTINGER_MAILBOX_OWNER_ID", clients: "HOSTINGER_MAILBOX_CLIENTS_ID", talent: "HOSTINGER_MAILBOX_TALENT_ID", interviews: "HOSTINGER_MAILBOX_INTERVIEWS_ID", finance: "HOSTINGER_MAILBOX_FINANCE_ID", privacy: "HOSTINGER_MAILBOX_PRIVACY_ID" };
+const senderAddressEnvKey: Record<EmailPurpose, string> = { owner: "HOSTINGER_MAILBOX_OWNER_ADDRESS", clients: "HOSTINGER_MAILBOX_CLIENTS_ADDRESS", talent: "HOSTINGER_MAILBOX_TALENT_ADDRESS", interviews: "HOSTINGER_MAILBOX_INTERVIEWS_ADDRESS", finance: "HOSTINGER_MAILBOX_FINANCE_ADDRESS", privacy: "HOSTINGER_MAILBOX_PRIVACY_ADDRESS" };
 
 export function isApprovedSenderAddress(address: string) {
   const normalized = address.trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) && normalized.endsWith(`@${approvedDomain}`);
+}
+
+export function getSenderAddress(purpose: EmailPurpose) {
+  return process.env[senderAddressEnvKey[purpose]]?.trim().toLowerCase() || `${purpose}@${approvedDomain}`;
 }
 
 export function detectOptOut(text: string) {
@@ -21,7 +26,7 @@ export function chooseThreadReference(input: { inReplyTo?: string; references: s
 
 export function getHostingerMailApiStatus() {
   const token = process.env.HOSTINGER_MAIL_API_TOKEN?.trim();
-  return { configured: Boolean(token), tokenConfigured: Boolean(token), webhookSecretConfigured: Boolean(process.env.HOSTINGER_MAIL_WEBHOOK_SECRET?.trim()), configuredMailboxCount: Object.values(mailboxEnvKey).filter(key => Boolean(process.env[key]?.trim())).length };
+  return { configured: Boolean(token), tokenConfigured: Boolean(token), webhookSecretConfigured: Boolean(process.env.HOSTINGER_MAIL_WEBHOOK_SECRET?.trim()), configuredMailboxCount: Object.values(mailboxResourceEnvKey).filter(key => Boolean(process.env[key]?.trim())).length, configuredSenderAddressCount: EMAIL_PURPOSES.filter(purpose => isApprovedSenderAddress(getSenderAddress(purpose))).length };
 }
 
 function getClient() {
@@ -41,9 +46,10 @@ export async function verifyHostingerMailApi() {
 }
 
 export async function sendViaHostingerMailApi(input: { purpose: EmailPurpose; to: string; displayName: string; subject: string; text: string }) {
-  if (!isApprovedSenderAddress(`${input.purpose}@${approvedDomain}`)) throw new Error("Selected sender is not in the approved domain allowlist.");
-  const mailboxResourceId = process.env[mailboxEnvKey[input.purpose]]?.trim();
+  const senderAddress = getSenderAddress(input.purpose);
+  if (!isApprovedSenderAddress(senderAddress)) throw new Error("Selected sender is not in the approved domain allowlist.");
+  const mailboxResourceId = process.env[mailboxResourceEnvKey[input.purpose]]?.trim();
   if (!mailboxResourceId) throw new Error(`Hostinger mailbox resource ID is not configured for ${input.purpose}.`);
   await new SendApi(getClient()).sendEmail(mailboxResourceId, { to: [input.to], displayName: input.displayName, cc: [], bcc: [], subject: input.subject, text: input.text, html: "", attachments: [], inReplyTo: undefined as never, forwardOf: undefined as never });
-  return { providerMessageId: null };
+  return { providerMessageId: null, senderAddress, mailboxResourceId };
 }
