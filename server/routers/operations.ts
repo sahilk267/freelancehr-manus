@@ -20,6 +20,8 @@ import { createId, ensureWorkspace, getRecentAudits, recordAudit, requireDb } fr
 import { protectedProcedure, router } from "../_core/trpc";
 import { processOneQueuedJob } from "../services/queue";
 import { assertTransition } from "../workflow";
+import { getProductionRuntimeStatus } from "../services/runtimeAuth";
+import { getHostingerMailApiStatus } from "../services/hostingerMail";
 
 const paginationInput = z.object({ limit: z.number().int().min(1).max(100).default(50) }).default({ limit: 50 });
 
@@ -59,6 +61,17 @@ export const operationsRouter = router({
   }),
   settings: router({
     get: protectedProcedure.query(async ({ ctx }) => ensureWorkspace(ctx.user.id)),
+    readiness: protectedProcedure.query(async ({ ctx }) => {
+      await ensureWorkspace(ctx.user.id);
+      const runtime = getProductionRuntimeStatus();
+      const mail = getHostingerMailApiStatus();
+      return {
+        runtime: { configured: runtime.configured, oidcConfigured: runtime.oidcConfigured, oidcMissing: runtime.oidcMissing, privateStorage: runtime.privateStorage },
+        mail: { configured: mail.configured, tokenConfigured: mail.tokenConfigured, webhookSecretConfigured: mail.webhookSecretConfigured, configuredMailboxCount: mail.configuredMailboxCount, configuredSenderAddressCount: mail.configuredSenderAddressCount },
+        calendar: { provider: "ics", timezoneSafe: true, remindersOwnerApproved: true },
+        ai: { structuredValidation: true, ownerReviewOnLowConfidence: true, openRouterFallback: true, autonomousFinalRejection: false },
+      };
+    }),
     update: protectedProcedure.input(z.object({ automationMode: z.enum(["safe", "controlled", "autopilot"]).optional(), dailyOutboundLimit: z.number().int().min(1).max(500).optional(), quietHoursStart: z.string().regex(/^\d{2}:\d{2}$/).optional(), quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).optional(), businessTimezone: z.string().min(2).max(64).optional() })).mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       await ensureWorkspace(ctx.user.id);

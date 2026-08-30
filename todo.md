@@ -142,3 +142,22 @@
 
 - [x] Add a focused delivery test proving sender address and mailbox resource ID are passed separately.
 - [x] Add a documented rejection/remediation test path for plain email values used where Hostinger requires mailbox resource IDs.
+
+## Platform Completion Acceptance
+
+- [x] Audit every owner dashboard workspace against its backend procedure, loading state, empty state, error state, and approval gate.
+- [x] Audit every consequential action for owner-only authorization, consent/suppression checks, immutable audit evidence, and safe failure behavior.
+- [x] Audit configuration/status surfaces so missing external credentials are clearly represented without blocking local platform development.
+- [x] Run end-to-end local acceptance checks for CRM, jobs, candidates, screening, interviews/calendar, placements/finance, team access, approvals, exceptions, mail, AI, and private documents.
+- [x] Complete final UI accessibility and responsive verification for all dashboard workspaces before deployment.
+
+- [x] Fix mobile overflow in the Candidates action controls so Upload CV, Record match, and Add candidate remain fully reachable at narrow widths.
+
+- [x] Update Control Plane sender identity cards and reply-to defaults to use the six configured `.fl@overseasjob.in` addresses.
+
+## Acceptance Evidence Follow-up
+
+- [x] Perform a documented workspace-by-workspace QA checklist covering procedure wiring, loading, empty, error, and approval-gate states for Command Center, Prospects, Jobs, Candidates, Interviews, Placements, Finance, Exceptions, Team, and Control Plane.
+- [x] Create or expand focused validations for each consequential action covering owner-only authorization, consent/suppression enforcement, audit-event creation, and safe failure.
+- [x] Add explicit UI status indicators for missing OIDC, private-storage, webhook, and mail configuration without blocking local development.
+- [x] Run and record concrete local acceptance flows for CRM, jobs, candidates, screening, interviews/calendar, placements/finance, team access, approvals, exceptions, mail, AI, and private documents.
