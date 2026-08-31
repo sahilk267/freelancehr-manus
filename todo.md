@@ -161,3 +161,9 @@
 - [x] Create or expand focused validations for each consequential action covering owner-only authorization, consent/suppression enforcement, audit-event creation, and safe failure.
 - [x] Add explicit UI status indicators for missing OIDC, private-storage, webhook, and mail configuration without blocking local development.
 - [x] Run and record concrete local acceptance flows for CRM, jobs, candidates, screening, interviews/calendar, placements/finance, team access, approvals, exceptions, mail, AI, and private documents.
+
+## Hostinger Database Handoff
+
+- [x] Add a safe database-import guide covering Hostinger MySQL creation, DATABASE_URL formatting, migration order, and verification.
+- [x] Document production startup checks and a non-destructive schema verification query.
+- [x] Validate the handoff documentation against the checked-in migration directory and Hostinger build.
