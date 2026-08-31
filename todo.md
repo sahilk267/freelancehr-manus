@@ -65,7 +65,7 @@
 - [x] Rename the control-plane mail health and configuration language from SMTP/IMAP to Hostinger Mail API.
 - [x] Update tests and Hostinger deployment documentation for Hostinger Mail API credentials, endpoint paths, sender verification, and inbound webhooks/events.
 - [ ] Validate the live Hostinger Mail API connection, sender identities, outbound approval flow, and inbound events after the user provides API access details.
-- [ ] Receive the Hostinger Mail API token, mailbox resource IDs, and webhook secret through secure configuration when the user is ready.
+- [x] Receive the Hostinger Mail API token, mailbox resource IDs, and webhook secret through secure configuration when the user is ready.
 - [x] Implement a Hostinger Mail API inbound webhook endpoint with secret validation, provider-payload normalization, and safe malformed-event handling.
 - [x] Enqueue accepted inbound replies for controlled classification and persist a corresponding audit event.
 - [x] Add tests for Hostinger inbound webhook validation, provider-thread correlation, malformed-event routing, and classification-queue creation.
