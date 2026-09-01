@@ -12,6 +12,15 @@ export type WorkspaceAccess = {
   memberId: string | null;
 };
 
+export function isPrimaryOwner(actor: Pick<User, "openId" | "email">) {
+  const configuredOpenId = process.env.PRIMARY_OWNER_OPEN_ID?.trim() || process.env.OWNER_OPEN_ID?.trim();
+  const configuredEmail = process.env.PRIMARY_OWNER_EMAIL?.trim().toLowerCase();
+  return Boolean(
+    (configuredOpenId && actor.openId === configuredOpenId) ||
+    (configuredEmail && actor.email?.trim().toLowerCase() === configuredEmail),
+  );
+}
+
 const rolePaths: Record<Exclude<TeamRole, "owner">, readonly string[]> = {
   recruiter: [
     "operations.dashboard",

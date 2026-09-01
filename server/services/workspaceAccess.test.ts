@@ -8,10 +8,25 @@ vi.mock("../db", () => ({
   }),
 }));
 
-const { canAccessWorkspacePath, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
+const { canAccessWorkspacePath, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
 
 describe("workspace team access", () => {
   beforeEach(() => { selectResults = []; });
+
+  it("recognizes the configured primary owner by Open ID", () => {
+    vi.stubEnv("OWNER_OPEN_ID", "owner-open-id");
+    expect(isPrimaryOwner({ openId: "owner-open-id", email: "owner@example.com" })).toBe(true);
+    expect(isPrimaryOwner({ openId: "other-open-id", email: "owner@example.com" })).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  it("recognizes the production primary owner by normalized email", () => {
+    vi.stubEnv("OWNER_OPEN_ID", "");
+    vi.stubEnv("PRIMARY_OWNER_EMAIL", "Owner@Example.com");
+    expect(isPrimaryOwner({ openId: "oidc-owner", email: " owner@example.COM " })).toBe(true);
+    expect(isPrimaryOwner({ openId: "oidc-other", email: "other@example.com" })).toBe(false);
+    vi.unstubAllEnvs();
+  });
 
   it("keeps the signed-in user's own workspace as the default", async () => {
     await expect(resolveWorkspaceAccess({ id: 17 } as never, null)).resolves.toEqual({ ownerId: 17, role: "owner", isOwner: true, memberId: null });

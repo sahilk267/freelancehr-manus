@@ -167,3 +167,10 @@
 - [x] Add a safe database-import guide covering Hostinger MySQL creation, DATABASE_URL formatting, migration order, and verification.
 - [x] Document production startup checks and a non-destructive schema verification query.
 - [x] Validate the handoff documentation against the checked-in migration directory and Hostinger build.
+
+## OAuth Owner Workspace Regression
+
+- [x] Trace the successful-login 403 path from session identity through workspace resolution and owner approval checks.
+- [x] Fix development owner bootstrap or workspace selection without weakening production owner/RBAC enforcement.
+- [x] Add regression coverage proving the configured owner reaches the Command Center after login.
+- [ ] Verify the local preview dashboard loads after the fix.

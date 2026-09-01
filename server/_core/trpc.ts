@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { runWithAuditActor } from "../services/actorContext";
-import { canAccessWorkspacePath, requestedWorkspaceId, resolveWorkspaceAccess } from "../services/workspaceAccess";
+import { canAccessWorkspacePath, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } from "../services/workspaceAccess";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -22,7 +22,7 @@ const requireUser = t.middleware(async opts => {
   const actor = ctx.user;
   const workspace = await resolveWorkspaceAccess(actor, requestedWorkspaceId(ctx.req));
   const selfServicePath = ["team.accept", "team.myAccess", "team.permissions", "accept", "myAccess", "permissions"].includes(opts.path);
-  if (actor.role !== "admin" && workspace.isOwner && !selfServicePath) {
+  if (actor.role !== "admin" && !isPrimaryOwner(actor) && workspace.isOwner && !selfServicePath) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Activate and select an owner-approved team workspace before accessing operational records." });
   }
   if (!canAccessWorkspacePath(workspace, opts.path)) {
