@@ -173,7 +173,7 @@
 - [x] Trace the successful-login 403 path from session identity through workspace resolution and owner approval checks.
 - [x] Fix development owner bootstrap or workspace selection without weakening production owner/RBAC enforcement.
 - [x] Add regression coverage proving the configured owner reaches the Command Center after login.
-- [ ] Verify the local preview dashboard loads after the fix.
+- [x] Verify the local preview dashboard loads after the fix.
 
 ## Local Demo Validation
 
