@@ -86,3 +86,13 @@ OIDC variables are required before the production authentication boundary is ena
 ## Startup sequence
 
 Use this order: create the empty MySQL database; configure `DATABASE_URL`; install dependencies; apply migrations once; configure the private local storage path; build with `pnpm build:hostinger`; configure the Node startup command `pnpm start:hostinger`; confirm the application health and owner login; then keep automation in safe mode. Deployment and live-domain testing are separate steps and are not performed by this guide.
+
+## Optional local demo validation
+
+The repository includes an explicitly opt-in demo seed command. Run it only against the local development database after the owner has signed in once:
+
+```bash
+DEMO_OWNER_OPEN_ID='<local-owner-open-id>' pnpm seed:demo
+```
+
+The command creates one fictional company, one consent-pending candidate, and one draft job with a shared `demo_<type>_<suffix>` identifier. It does not send email, invoke AI, create interviews, or trigger external automation. Save the three IDs printed by the command for local review. To remove only these records after validation, first verify the IDs and delete the child job and candidate rows before the company row using a database administration tool; never run a broad delete against a shared or production database without reviewing every returned row.

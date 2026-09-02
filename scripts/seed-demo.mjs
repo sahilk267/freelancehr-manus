@@ -8,7 +8,17 @@ if (!databaseUrl || !ownerOpenId) {
 }
 
 const url = new URL(databaseUrl);
-const connection = await mysql.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), ssl: url.searchParams.get("ssl") === "true" ? { rejectUnauthorized: true } : undefined });
+const sslParam = url.searchParams.get("ssl");
+let ssl;
+if (sslParam === "true" || sslParam === "1") {
+  ssl = { rejectUnauthorized: true };
+} else if (sslParam?.startsWith("{")) {
+  ssl = JSON.parse(sslParam);
+} else if (sslParam === null) {
+  // TiDB Cloud and many Hostinger MySQL deployments require TLS.
+  ssl = { rejectUnauthorized: true };
+}
+const connection = await mysql.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), ssl });
 const [[owner]] = await connection.query("SELECT id FROM users WHERE openId = ? LIMIT 1", [ownerOpenId]);
 if (!owner) throw new Error("The specified demo owner has not signed in yet. Sign in once, then rerun the script.");
 
