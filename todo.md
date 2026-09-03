@@ -178,7 +178,7 @@
 ## Local Demo Validation
 
 - [x] Run the existing explicitly fictional, owner-scoped demo seed against the local development database only.
-- [ ] Verify the seeded prospect, candidate, and job appear in the owner workspace without sending email or triggering external automation.
+- [x] Verify the seeded prospect, candidate, and job appear in the owner workspace without sending email or triggering external automation.
 - [x] Document the generated demo IDs and cleanup guidance.
 
 - [x] Fix the demo seed’s MySQL TLS parsing so it works with the project’s secure TiDB/Hostinger DATABASE_URL format without weakening transport security.
