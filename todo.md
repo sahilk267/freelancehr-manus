@@ -182,3 +182,9 @@
 - [x] Document the generated demo IDs and cleanup guidance.
 
 - [x] Fix the demo seed’s MySQL TLS parsing so it works with the project’s secure TiDB/Hostinger DATABASE_URL format without weakening transport security.
+
+## Git Push and Owner Deployment Handoff
+
+- [ ] Audit the current worktree, remote branch, ignored secrets, and deployment documentation before pushing.
+- [ ] Commit and push the latest platform-complete state to `sahilk267/freelancehr-manus`.
+- [ ] Verify the remote revision and prepare a detailed secret-safe Hostinger deployment checklist for the owner.
