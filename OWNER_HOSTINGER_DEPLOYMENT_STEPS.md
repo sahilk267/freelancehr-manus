@@ -12,7 +12,7 @@ The following activities must still be performed in Hostinger: create the produc
 
 Open Hostinger hPanel and create a Node.js application under the Business hosting plan. Use the GitHub repository `sahilk267/freelancehr-manus` and the `main` branch. If hPanel asks for an application root, use the directory into which the repository is cloned. Do not deploy from a directory containing `.env` files, local logs, candidate documents, or generated private-storage files.
 
-Use the repository’s package manager and scripts. The build command is:
+Use the repository’s package manager and scripts. Hostinger should use its pnpm 11.x runtime; do not force pnpm 10.x because the project metadata is aligned with Hostinger Corepack. The build command is:
 
 ```bash
 pnpm install --frozen-lockfile && pnpm build:hostinger

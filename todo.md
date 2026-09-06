@@ -188,3 +188,9 @@
 - [x] Audit the current worktree, remote branch, ignored secrets, and deployment documentation before pushing.
 - [x] Commit and push the latest platform-complete state to `sahilk267/freelancehr-manus`.
 - [x] Verify the remote revision and prepare a detailed secret-safe Hostinger deployment checklist for the owner.
+
+## Hostinger pnpm Compatibility Fix
+
+- [x] Align package-manager metadata and lockfile expectations with Hostinger’s Corepack pnpm runtime.
+- [x] Re-run install, TypeScript, tests, and Hostinger build after the compatibility fix.
+- [x] Push the fix and update the owner deployment guide with the corrected Hostinger settings.
