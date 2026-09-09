@@ -26,6 +26,10 @@ export function isPrimaryOwner(actor: Pick<User, "openId" | "email">) {
   );
 }
 
+export function canUseApplication(actor: Pick<User, "openId" | "email">) {
+  return !isOwnerOnlyMode() || isPrimaryOwner(actor);
+}
+
 const rolePaths: Record<Exclude<TeamRole, "owner">, readonly string[]> = {
   recruiter: [
     "operations.dashboard",

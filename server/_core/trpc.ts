@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { runWithAuditActor } from "../services/actorContext";
-import { canAccessWorkspacePath, isOwnerOnlyMode, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } from "../services/workspaceAccess";
+import { canAccessWorkspacePath, canUseApplication, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } from "../services/workspaceAccess";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -20,7 +20,7 @@ const requireUser = t.middleware(async opts => {
   }
 
   const actor = ctx.user;
-  if (isOwnerOnlyMode() && !isPrimaryOwner(actor)) {
+  if (!canUseApplication(actor)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "FreelanceHR is currently in owner-only testing mode." });
   }
   const workspace = await resolveWorkspaceAccess(actor, requestedWorkspaceId(ctx.req));

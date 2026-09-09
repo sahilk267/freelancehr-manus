@@ -201,3 +201,4 @@
 - [x] Keep only the configured primary owner allowed to use the application in test mode.
 - [x] Preserve OIDC and team-access configuration as a later opt-in, not a current prerequisite.
 - [x] Add automated coverage and deployment guidance for owner-only testing.
+- [x] Apply owner-only enforcement to direct authenticated requests and OIDC user provisioning, not only tRPC workspace routes.

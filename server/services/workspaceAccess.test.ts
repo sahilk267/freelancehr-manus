@@ -8,7 +8,7 @@ vi.mock("../db", () => ({
   }),
 }));
 
-const { canAccessWorkspacePath, isOwnerOnlyMode, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
+const { canAccessWorkspacePath, canUseApplication, isOwnerOnlyMode, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
 
 describe("workspace team access", () => {
   beforeEach(() => { selectResults = []; });
@@ -18,6 +18,14 @@ describe("workspace team access", () => {
     expect(isOwnerOnlyMode()).toBe(true);
     vi.stubEnv("OWNER_ONLY_MODE", "false");
     expect(isOwnerOnlyMode()).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  it("allows only the configured primary owner in owner-only mode", () => {
+    vi.stubEnv("OWNER_ONLY_MODE", "true");
+    vi.stubEnv("PRIMARY_OWNER_EMAIL", "owner@example.com");
+    expect(canUseApplication({ openId: "owner", email: "owner@example.com" })).toBe(true);
+    expect(canUseApplication({ openId: "member", email: "member@example.com" })).toBe(false);
     vi.unstubAllEnvs();
   });
 

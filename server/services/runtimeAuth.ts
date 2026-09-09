@@ -4,7 +4,7 @@ import { SignJWT, createRemoteJWKSet, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import { getUserByOpenId, upsertUser } from "../db";
 import { getPrivateStorageStatus } from "./privateStorage";
-import { isOwnerOnlyMode, isPrimaryOwner } from "./workspaceAccess";
+import { canUseApplication } from "./workspaceAccess";
 import { sdk } from "../_core/sdk";
 
 const SESSION_COOKIE = "__Host-fh_session";
@@ -175,7 +175,7 @@ export async function completeOidcLogin(input: { code?: string; state?: string; 
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : null;
   const name = typeof claims.name === "string" ? claims.name.slice(0, 160) : email;
   const openId = stableOpenId(discovery.issuer, claims.sub);
-  if (isOwnerOnlyMode() && !isPrimaryOwner({ openId, email })) {
+  if (!canUseApplication({ openId, email })) {
     throw new Error("FreelanceHR is currently in owner-only testing mode.");
   }
   await upsertUser({ openId, email, name, loginMethod: "oidc", lastSignedIn: new Date() });
@@ -186,7 +186,10 @@ export async function completeOidcLogin(input: { code?: string; state?: string; 
 
 export async function authenticateRuntimeRequest(request: { headers?: { cookie?: string } }) : Promise<User | null> {
   if (!isOidcRuntime()) {
-    try { return await sdk.authenticateRequest(request as Parameters<typeof sdk.authenticateRequest>[0]); }
+    try {
+      const user = await sdk.authenticateRequest(request as Parameters<typeof sdk.authenticateRequest>[0]);
+      return canUseApplication(user) ? user : null;
+    }
     catch { return null; }
   }
   try {
@@ -194,7 +197,9 @@ export async function authenticateRuntimeRequest(request: { headers?: { cookie?:
     const token = parseCookies(request.headers?.cookie)[SESSION_COOKIE];
     if (!token) return null;
     const verified = await jwtVerify(token, new TextEncoder().encode(config.sessionSecret), { algorithms: ["HS256"] });
-    return typeof verified.payload.sub === "string" ? await getUserByOpenId(verified.payload.sub) ?? null : null;
+    if (typeof verified.payload.sub !== "string") return null;
+    const user = await getUserByOpenId(verified.payload.sub);
+    return user && canUseApplication(user) ? user : null;
   } catch { return null; }
 }
 
