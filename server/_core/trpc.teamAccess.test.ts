@@ -42,4 +42,19 @@ describe("tRPC team workspace middleware", () => {
     const caller = testRouter.createCaller({ user: { id: 17, role: "user", email: "member@example.test" }, req: { headers: {} }, res: {} } as never);
     await expect(caller.recruitment.jobs.create()).rejects.toThrow("Activate and select");
   });
+
+  it("blocks every non-owner route in owner-only testing mode", async () => {
+    vi.stubEnv("OWNER_ONLY_MODE", "true");
+    const caller = testRouter.createCaller({ user: { id: 17, role: "user", email: "member@example.test" }, req: { headers: {} }, res: {} } as never);
+    await expect(caller.recruitment.jobs.create()).rejects.toThrow("owner-only testing mode");
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the configured primary owner allowed in owner-only testing mode", async () => {
+    vi.stubEnv("OWNER_ONLY_MODE", "true");
+    vi.stubEnv("PRIMARY_OWNER_EMAIL", "owner@example.test");
+    const caller = testRouter.createCaller({ user: { id: 17, role: "user", email: "owner@example.test" }, req: { headers: {} }, res: {} } as never);
+    await expect(caller.recruitment.jobs.create()).resolves.toEqual({ workspaceOwnerId: 17, actorId: 17, role: "owner" });
+    vi.unstubAllEnvs();
+  });
 });

@@ -8,10 +8,18 @@ vi.mock("../db", () => ({
   }),
 }));
 
-const { canAccessWorkspacePath, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
+const { canAccessWorkspacePath, isOwnerOnlyMode, isPrimaryOwner, requestedWorkspaceId, resolveWorkspaceAccess } = await import("./workspaceAccess");
 
 describe("workspace team access", () => {
   beforeEach(() => { selectResults = []; });
+
+  it("parses owner-only testing mode without enabling it by default", () => {
+    vi.stubEnv("OWNER_ONLY_MODE", "true");
+    expect(isOwnerOnlyMode()).toBe(true);
+    vi.stubEnv("OWNER_ONLY_MODE", "false");
+    expect(isOwnerOnlyMode()).toBe(false);
+    vi.unstubAllEnvs();
+  });
 
   it("recognizes the configured primary owner by Open ID", () => {
     vi.stubEnv("OWNER_OPEN_ID", "owner-open-id");

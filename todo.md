@@ -194,3 +194,10 @@
 - [x] Align package-manager metadata and lockfile expectations with Hostinger’s Corepack pnpm runtime.
 - [x] Re-run install, TypeScript, tests, and Hostinger build after the compatibility fix.
 - [x] Push the fix and update the owner deployment guide with the corrected Hostinger settings.
+
+## Owner-Only Testing Phase
+
+- [x] Disable public signup and external-user access for the current testing phase.
+- [x] Keep only the configured primary owner allowed to use the application in test mode.
+- [x] Preserve OIDC and team-access configuration as a later opt-in, not a current prerequisite.
+- [x] Add automated coverage and deployment guidance for owner-only testing.

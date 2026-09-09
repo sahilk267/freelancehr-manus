@@ -69,6 +69,9 @@ The result should include the FreelanceHR tables such as `users`, `workspaceSett
 
 ## 4. Add production environment variables
 
+For the first private test, set `OWNER_ONLY_MODE=true`. This does not create a signup flow and blocks every authenticated account except the configured primary owner from protected application routes. Keep team invitations and external access disabled. OIDC can remain a later activation step; do not invent OIDC values just to begin local owner testing.
+
+
 In the Hostinger Node.js application’s environment settings, add the following variables. Replace every placeholder with a real value from Hostinger or the selected provider. Do not commit this list with values into GitHub.
 
 ```dotenv
@@ -111,7 +114,10 @@ The six `*_ADDRESS` variables are visible sender identities. The six matching `*
 
 The private storage path must be outside the public web root. A safe Hostinger example is a private application directory supplied by hPanel, not `public_html`, not `client/public`, and not a static-assets directory. The application serves local private documents only through an authenticated owner-authorized route.
 
-## 5. Configure OIDC
+## 5. Configure OIDC later, only when scaling beyond the owner
+
+OIDC is not required for the initial owner-only test. Leave the OIDC variables unset only in an environment that still uses the existing preview/development authentication. Before using a standalone Hostinger production deployment, select an OIDC provider and complete the provider setup below; production startup validation will then require the OIDC values.
+
 
 Choose one OIDC provider that supports authorization-code flow with PKCE. In that provider, register this exact callback URL:
 

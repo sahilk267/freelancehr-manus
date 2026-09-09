@@ -12,6 +12,11 @@ export type WorkspaceAccess = {
   memberId: string | null;
 };
 
+export function isOwnerOnlyMode() {
+  const value = process.env.OWNER_ONLY_MODE?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 export function isPrimaryOwner(actor: Pick<User, "openId" | "email">) {
   const configuredOpenId = process.env.PRIMARY_OWNER_OPEN_ID?.trim() || process.env.OWNER_OPEN_ID?.trim();
   const configuredEmail = process.env.PRIMARY_OWNER_EMAIL?.trim().toLowerCase();

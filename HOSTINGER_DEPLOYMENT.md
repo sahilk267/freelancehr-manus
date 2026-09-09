@@ -43,6 +43,10 @@ The production server intentionally **refuses to start** unless its OIDC and pri
 
 In local mode, the document table stores a non-public `local/...` reference outside the public web root. Access is granted through the authenticated owner-authorized `/api/private-storage/*` route, with a corresponding audit event. When S3 backup mode is activated, records instead use `private://s3/...` and short-lived signed URLs. Team roles cannot access the signed-document procedure.
 
+## Initial owner-only testing mode
+
+For the first private test, set `OWNER_ONLY_MODE=true`. This blocks protected routes for every authenticated account except the configured primary owner and does not create a public signup path. Keep team invitations and external access disabled. OIDC is a later scaling step; standalone production startup still requires the selected OIDC provider configuration before public deployment.
+
 ## Environment inventory
 
 Never commit the values. Set these in the Hostinger application environment panel or equivalent secure secret manager. The `HOSTINGER_MAILBOX_*_ADDRESS` variables define the visible From identity, while the separate `HOSTINGER_MAILBOX_*_ID` variables must contain the resource identifiers accepted by the Hostinger Mail API. An email address may be valid for sender allowlisting but still be rejected as an API mailbox resource ID. If delivery returns a `mailboxResourceId` validation error, keep the matching `HOSTINGER_MAILBOX_*_ADDRESS` unchanged and replace only the matching `HOSTINGER_MAILBOX_*_ID` with the mailbox resource ID shown by Hostinger. Do not substitute the visible sender address into the resource-ID field.
@@ -53,6 +57,7 @@ PORT=<provided-by-hostinger>
 DATABASE_URL=mysql://<user>:<password>@<host>:<port>/<database>?ssl={"rejectUnauthorized":true}
 OPENROUTER_API_KEY=<server-side-only>
 APP_BASE_URL=https://freelancehr.overseasjob.in
+OWNER_ONLY_MODE=true
 SESSION_SECRET=<at-least-32-random-bytes>
 OIDC_ISSUER_URL=<selected-auth-provider>
 OIDC_CLIENT_ID=<selected-auth-provider>

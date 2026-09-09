@@ -4,6 +4,7 @@ import { SignJWT, createRemoteJWKSet, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import { getUserByOpenId, upsertUser } from "../db";
 import { getPrivateStorageStatus } from "./privateStorage";
+import { isOwnerOnlyMode, isPrimaryOwner } from "./workspaceAccess";
 import { sdk } from "../_core/sdk";
 
 const SESSION_COOKIE = "__Host-fh_session";
@@ -174,6 +175,9 @@ export async function completeOidcLogin(input: { code?: string; state?: string; 
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : null;
   const name = typeof claims.name === "string" ? claims.name.slice(0, 160) : email;
   const openId = stableOpenId(discovery.issuer, claims.sub);
+  if (isOwnerOnlyMode() && !isPrimaryOwner({ openId, email })) {
+    throw new Error("FreelanceHR is currently in owner-only testing mode.");
+  }
   await upsertUser({ openId, email, name, loginMethod: "oidc", lastSignedIn: new Date() });
   const user = await getUserByOpenId(openId);
   if (!user) throw new Error("OIDC user provisioning failed.");
