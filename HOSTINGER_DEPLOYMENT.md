@@ -18,13 +18,13 @@ The managed development template includes platform-specific authentication and s
 
 ## Deployment pipeline
 
-The repeatable pipeline is **build → upload/deploy → configure environment → set Node startup → configure domain → run migration → verify health → enable restricted automation**. The repository declares pnpm 11.x to match Hostinger Corepack; do not force pnpm 10.x during hPanel installation. Each action should run with a separate deployment account and audit record.
+The repeatable pipeline is **build → upload/deploy → configure environment → set Node startup → configure domain → run migration → verify health → enable restricted automation**. The repository declares pnpm 11.x to match Hostinger Corepack; do not force pnpm 10.x during hPanel installation. The default `pnpm build` and `pnpm start` commands now target the Hostinger Fastify artifact (`dist/hostinger.js`), so hPanel does not need a custom script name. Each action should run with a separate deployment account and audit record.
 
 | Step | Action | Acceptance condition |
 | --- | --- | --- |
 | 1 | Create a Git repository or zip release from the audited project | No `.env` file, candidate document, local log, or test data is included |
 | 2 | In hPanel, create a Node.js application for the subdomain | App root and startup command are configured |
-| 3 | Build with `pnpm install --frozen-lockfile && pnpm build:hostinger` using Hostinger’s pnpm 11.x runtime | `dist/public` and `dist/hostinger.js` are created |
+| 3 | Let hPanel install dependencies with pnpm 11.x, then build with `pnpm build` | `dist/public` and `dist/hostinger.js` are created |
 | 4 | Set server secrets in hPanel environment settings | Secrets are visible only to the Node runtime |
 | 5 | Attach TLS-enabled MySQL and run Drizzle migrations once | Tables and indices are created without destructive changes |
 | 6 | Point `freelancehr.overseasjob.in` to the Node application and enable SSL | HTTPS health endpoint is reachable |

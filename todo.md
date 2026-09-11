@@ -202,3 +202,9 @@
 - [x] Preserve OIDC and team-access configuration as a later opt-in, not a current prerequisite.
 - [x] Add automated coverage and deployment guidance for owner-only testing.
 - [x] Apply owner-only enforcement to direct authenticated requests and OIDC user provisioning, not only tRPC workspace routes.
+
+## Hostinger Deployment Failure Follow-up
+
+- [x] Compare the pasted Hostinger build command and artifacts with the repository’s intended Hostinger build/start commands.
+- [x] Resolve any deployment command or runtime artifact mismatch and preserve the pnpm 11 compatibility fix.
+- [x] Re-run TypeScript, tests, and Hostinger build validation, then update the owner handoff with the exact hPanel command.

@@ -12,17 +12,21 @@ The following activities must still be performed in Hostinger: create the produc
 
 Open Hostinger hPanel and create a Node.js application under the Business hosting plan. Use the GitHub repository `sahilk267/freelancehr-manus` and the `main` branch. If hPanel asks for an application root, use the directory into which the repository is cloned. Do not deploy from a directory containing `.env` files, local logs, candidate documents, or generated private-storage files.
 
-Use the repository’s package manager and scripts. Hostinger should use its pnpm 11.x runtime; do not force pnpm 10.x because the project metadata is aligned with Hostinger Corepack. The build command is:
+Use the repository’s package manager and scripts. Hostinger should use its pnpm 11.x runtime; do not force pnpm 10.x because the project metadata is aligned with Hostinger Corepack. The repository’s default commands now target the Hostinger Fastify artifact directly, so use these hPanel settings:
+
+Build command:
 
 ```bash
-pnpm install --frozen-lockfile && pnpm build:hostinger
+pnpm build
 ```
 
-The production startup command is:
+Startup command:
 
 ```bash
-pnpm start:hostinger
+pnpm start
 ```
+
+If hPanel has a separate dependency-install field, use `pnpm install --frozen-lockfile`; do not combine that install command into the build field if hPanel installs dependencies automatically.
 
 Do not hardcode the port. Hostinger supplies the runtime `PORT` value. If hPanel has separate install, build, and start fields, place the commands in their corresponding fields. If hPanel accepts one build command, use the combined command above.
 
